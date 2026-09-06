@@ -61,8 +61,6 @@ class AppConfig:
             "database_path": str(self.default_db_path),
             "backup_dir": str(self.default_backup_dir),
             "export_dir": str(self.default_export_dir),
-            "google_token_file": str(self.app_data_dir / "google_token.json"),
-            "google_credentials_file": "",
             "backup_retention_days": 30,
             "first_run_completed": False
         }

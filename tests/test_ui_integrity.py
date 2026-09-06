@@ -97,7 +97,6 @@ def test_phase2_views_instantiation_and_components(qapp):
     from ui.dialogs.candidate_edit_dialog import CandidateEditDialog
     from ui.dialogs.candidate_details_dialog import CandidateDetailsDialog
     from ui.views.government_jobs_view import GovernmentJobsView
-    from ui.views.private_jobs_view import PrivateJobsView
     from ui.views.recruiters_view import RecruitersView
     from ui.views.dashboard_view import DashboardView
     from ui.views.reports_view import ReportsView
@@ -116,12 +115,6 @@ def test_phase2_views_instantiation_and_components(qapp):
     assert hasattr(gov_view, "table")
     assert hasattr(gov_view, "txt_search")
     assert hasattr(gov_view, "cmb_status")
-
-    # 3. PrivateJobsView
-    priv_view = PrivateJobsView()
-    assert hasattr(priv_view, "table")
-    assert hasattr(priv_view, "txt_search")
-    assert hasattr(priv_view, "cmb_status")
 
     # 4. RecruitersView
     rec_view = RecruitersView()
