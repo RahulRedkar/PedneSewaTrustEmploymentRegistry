@@ -198,10 +198,14 @@ class BackupView(QWidget):
         if getattr(self, "_manual_backup_active", False):
             self._manual_backup_active = False
             pushed = info.get("records_pushed", 0)
+            if pushed > 0:
+                body = f"Cloud backup completed successfully.\n\n{pushed} candidate records synchronized with the cloud repository."
+            else:
+                body = "Cloud backup is already up to date.\n\nAll candidate records have been synchronized with the cloud repository."
             QMessageBox.information(
                 self,
                 "Cloud Backup Complete",
-                f"Cloud backup completed successfully.\n\n{pushed} candidate records synchronized with the cloud repository."
+                body
             )
 
     def _on_sync_failure(self, err_msg: str):

@@ -33,6 +33,7 @@ class SyncEngine:
             msg = "Cloud backup gateway is not configured. Local data is safely preserved on this computer."
             logger.info(msg)
             signals.sync_status_changed.emit("offline", "Backup: Not configured")
+            signals.sync_failed.emit(msg)
             return {"status": "NOT_CONFIGURED", "records_pushed": 0, "message": msg}
 
         # 2. Fetch pending/failed local records
@@ -41,6 +42,7 @@ class SyncEngine:
             msg = "All candidate records are already backed up to the cloud."
             logger.info(msg)
             signals.sync_status_changed.emit("synced", "Backup: Up to date")
+            signals.sync_completed.emit({"records_pushed": 0, "message": msg})
             return {"status": "SUCCESS", "records_pushed": 0, "message": msg}
 
         signals.sync_status_changed.emit("pending", f"Backup: Syncing {len(pending_candidates)} records...")

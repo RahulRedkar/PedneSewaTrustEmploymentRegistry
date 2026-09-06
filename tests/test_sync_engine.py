@@ -328,4 +328,70 @@ def test_candidate_location_regression_and_defensive_serialization():
     assert d3["recruiter_consent_date"] == ""
 
 
+def test_sync_zero_pending_records_emits_sync_completed(sync_setup):
+    """Regression test: Verifies that sync_engine emits sync_completed even when 0 records are pending."""
+    from app.signals import signals
+    repo, engine = sync_setup
 
+    completed_signals = []
+    signals.sync_completed.connect(lambda info: completed_signals.append(info))
+
+    with patch("sync.sync_engine.repository", repo), \
+         patch("sync.sync_engine.apps_script_client.is_configured", return_value=True):
+
+        res = engine.run_sync()
+        assert res["status"] == "SUCCESS"
+        assert res["records_pushed"] == 0
+        assert len(completed_signals) == 1
+        assert completed_signals[0]["records_pushed"] == 0
+
+
+def test_sync_failure_leaves_candidate_pending_and_emits_failed(sync_setup):
+    """Regression test: Verifies that Apps Script failure leaves candidate PENDING and emits sync_failed."""
+    from app.signals import signals
+    repo, engine = sync_setup
+
+    cand = Candidate(full_name="Sunil Parsekar", mobile="9822998877", village="Pernem", employment=Employment(status="EMPLOYED"))
+    cand = repo.save_candidate(cand)
+    assert cand.sync_status == "PENDING"
+
+    failed_signals = []
+    signals.sync_failed.connect(lambda err: failed_signals.append(err))
+
+    with patch("sync.sync_engine.repository", repo), \
+         patch("sync.sync_engine.apps_script_client.is_configured", return_value=True), \
+         patch("sync.sync_engine.apps_script_client.push_candidates", return_value={"status": "FAILURE", "error": "Gateway Error 500"}):
+
+        res = engine.run_sync()
+        assert res["status"] == "FAILURE"
+        assert len(failed_signals) == 1
+
+        cand_in_db = repo.get_candidate(cand.candidate_id)
+        assert cand_in_db.sync_status == "PENDING"
+
+
+def test_sync_success_marks_candidate_synced_and_emits_completed(sync_setup):
+    """Regression test: Verifies that Apps Script success marks candidate SYNCED and emits sync_completed."""
+    from app.signals import signals
+    repo, engine = sync_setup
+
+    cand = Candidate(full_name="Pooja Redkar", mobile="9822556677", village="Mandrem", employment=Employment(status="EMPLOYED"))
+    cand = repo.save_candidate(cand)
+    assert cand.sync_status == "PENDING"
+
+    completed_signals = []
+    signals.sync_completed.connect(lambda info: completed_signals.append(info))
+
+    with patch("sync.sync_engine.repository", repo), \
+         patch("sync.sync_engine.apps_script_client.is_configured", return_value=True), \
+         patch("sync.sync_engine.apps_script_client.push_candidates", return_value={"status": "SUCCESS", "records_pushed": 1}):
+
+        res = engine.run_sync()
+        assert res["status"] == "SUCCESS"
+        assert res["records_pushed"] == 1
+        assert len(completed_signals) == 1
+        assert completed_signals[0]["records_pushed"] == 1
+
+        cand_in_db = repo.get_candidate(cand.candidate_id)
+        assert cand_in_db.sync_status == "SYNCED"
+        assert cand_in_db.last_synced_at is not None

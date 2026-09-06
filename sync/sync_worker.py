@@ -25,6 +25,8 @@ class SyncTaskThread(QThread):
             self.finished_signal.emit(res)
         except Exception as e:
             logger.error("Error in sync worker thread: %s", e)
+            from app.signals import signals
+            signals.sync_failed.emit(str(e))
             self.finished_signal.emit({"status": "FAILURE", "error": str(e)})
 
 
