@@ -45,6 +45,7 @@ exports/
 build/
 dist/
 release-dist/
+test_installed_*/
 *.spec.bak
 *.zip
 *.tar.gz
