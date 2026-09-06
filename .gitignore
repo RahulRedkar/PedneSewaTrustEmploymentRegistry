@@ -1,0 +1,75 @@
+# Python Bytecode & Environments
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.env
+
+# Sensitive Secrets, Environment Variables & API Keys (DO NOT COMMIT)
+credentials.json
+**/credentials.json
+app/credentials.json
+client_secret.json
+client_secret_*.json
+google_token.json
+**/google_token.json
+tokens.json
+token.pickle
+token.json
+GITHUB_UPDATE_TOKEN
+config.json
+**/config.json
+!config.example.json
+!app/config.example.json
+
+# Local Operational SQLite Database & User Data
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+data/
+backups/
+exports/
+.pedne_sewa_trust/
+
+# Generated User Exports
+*.csv
+*.xlsx
+*.pdf
+
+# PyInstaller Output & Build Artifacts
+build/
+dist/
+release-dist/
+*.spec.bak
+*.zip
+*.tar.gz
+*.tmp
+temp/
+tmp/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+*.log
+logs/
+
+# IDE & Editor Files
+.idea/
+.vscode/
+*.swp
+*.swo
+*.suo
+*.user
+
+# OS Metadata
+Thumbs.db
+Desktop.ini
+.DS_Store

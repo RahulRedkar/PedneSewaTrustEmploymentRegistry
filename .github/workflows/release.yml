@@ -1,0 +1,87 @@
+name: Release Windows Executable
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Test Suite
+        run: |
+          python -m pytest tests/ -v
+
+      - name: Build Standalone Windows Executable
+        run: |
+          python build_exe.py
+
+      - name: Verify Executable Integrity
+        shell: pwsh
+        run: |
+          $exePath = "dist\PedneSewaTrustRegistry\PedneSewaTrustRegistry.exe"
+          if (-not (Test-Path $exePath)) {
+              Write-Error "CRITICAL: Executable was not created at $exePath"
+              exit 1
+          }
+          $item = Get-Item $exePath
+          Write-Host "Verified executable ($($item.Length) bytes) at $exePath"
+
+      - name: Package Release Assets & Generate Checksums
+        shell: pwsh
+        run: |
+          # Determine version tag from tag ref or app/version.py
+          if ($env:GITHUB_REF -like "refs/tags/*") {
+              $TAG = $env:GITHUB_REF -replace "refs/tags/", ""
+          } else {
+              $VERSION = (Get-Content app/version.py | Select-String 'APP_VERSION = "([^"]+)"').Matches.Groups[1].Value
+              $TAG = "v$VERSION"
+          }
+          Write-Host "Packaging release for tag: $TAG"
+
+          # Create release staging folder
+          New-Item -ItemType Directory -Path "release-dist" -Force | Out-Null
+
+          # Complete Distribution ZIP containing the entire application directory
+          $ZIP_NAME = "PedneSewaTrustRegistry-$TAG-Windows.zip"
+          Compress-Archive -Path "dist\PedneSewaTrustRegistry\*" -DestinationPath "release-dist\$ZIP_NAME" -Force
+
+          # Generate SHA256SUMS.txt
+          Set-Location "release-dist"
+          $zipHash = (Get-FileHash -Path "$ZIP_NAME" -Algorithm SHA256).Hash.ToLower()
+          "$zipHash  $ZIP_NAME" | Out-File -FilePath "SHA256SUMS.txt" -Encoding utf8
+
+          Write-Host "Generated SHA256SUMS.txt:"
+          Get-Content "SHA256SUMS.txt"
+          Set-Location ".."
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            release-dist/PedneSewaTrustRegistry-*-Windows.zip
+            release-dist/SHA256SUMS.txt
+          generate_release_notes: true
+          draft: false
+          prerelease: false
