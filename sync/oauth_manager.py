@@ -21,7 +21,8 @@ class OAuthManager:
     """Manages Google OAuth 2.0 desktop authentication lifecycle."""
 
     def __init__(self):
-        self.token_path = Path(config.get("google_token_file"))
+        token_file = config.get("google_token_file") or (config.app_data_dir / "google_token.json")
+        self.token_path = Path(token_file)
         self._creds: Optional[Credentials] = None
 
     def get_credentials_path(self) -> Optional[str]:

@@ -14,8 +14,8 @@ from utils.logger import logger
 class ReportCSVExporter:
     """Exports structured report tables into readable CSV files."""
 
-    def __init__(self):
-        self.export_dir = Path(config.get("export_dir"))
+    def __init__(self, export_dir: Optional[str] = None):
+        self.export_dir = Path(export_dir or config.get("export_dir") or (config.app_data_dir / "exports"))
         self.export_dir.mkdir(parents=True, exist_ok=True)
 
     def export_report_table(
