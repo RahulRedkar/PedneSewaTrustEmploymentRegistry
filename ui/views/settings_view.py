@@ -202,7 +202,8 @@ class SettingsView(QWidget):
         ver_label.setStyleSheet("color: #15803D; font-weight: 700; font-size: 13px;")
         f_update.addRow("Version:", ver_label)
 
-        repo_label = QLabel(f"<a href='https://github.com/{GITHUB_REPO_SLUG}'>github.com/{GITHUB_REPO_SLUG}</a>", update_card)
+        repo_slug = config.get("github_repo") or GITHUB_REPO_SLUG
+        repo_label = QLabel(f"<a href='https://github.com/{repo_slug}'>github.com/{repo_slug}</a>", update_card)
         repo_label.setOpenExternalLinks(True)
         repo_label.setStyleSheet("color: #0284C7; font-size: 13px;")
         f_update.addRow("GitHub Repository:", repo_label)

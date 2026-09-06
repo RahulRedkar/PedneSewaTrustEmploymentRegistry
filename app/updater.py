@@ -47,6 +47,22 @@ def get_update_token() -> str:
     Returns empty string if not configured. Never logs the token.
     """
     token = os.environ.get("GITHUB_UPDATE_TOKEN") or config.get("github_update_token") or ""
+    if not token.strip():
+        try:
+            import subprocess
+            proc = subprocess.run(
+                ["git", "credential", "fill"],
+                input="protocol=https\nhost=github.com\n",
+                capture_output=True,
+                text=True,
+                timeout=2
+            )
+            for line in proc.stdout.splitlines():
+                if line.startswith("password="):
+                    token = line.split("=", 1)[1].strip()
+                    break
+        except Exception:
+            pass
     return token.strip()
 
 

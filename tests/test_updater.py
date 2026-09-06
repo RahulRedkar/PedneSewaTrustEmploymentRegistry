@@ -1,4 +1,4 @@
-﻿"""
+"""
 Comprehensive automated test suite for GitHub Releases Auto-Updater in Pedne Sewa Trust Registry.
 Validates:
 1. Version logic: semantic version parsing, comparison, newer version detection, no-update condition.
@@ -62,6 +62,34 @@ def test_semantic_version_comparison():
 # ==============================================================================
 # 2. GitHub API Mocked Request Tests
 # ==============================================================================
+
+def test_updater_constructs_canonical_api_endpoint(qapp):
+    """Verifies that updater constructs the canonical private repo endpoint and excludes old owner."""
+    from app.version import GITHUB_OWNER, GITHUB_REPOSITORY, GITHUB_REPO_SLUG
+    from app.updater import DEFAULT_GITHUB_REPO
+
+    # Authoritative values
+    assert GITHUB_OWNER == "RahulRedkar"
+    assert GITHUB_REPOSITORY == "PedneSewaTrustEmploymentRegistry"
+    assert GITHUB_REPO_SLUG == "RahulRedkar/PedneSewaTrustEmploymentRegistry"
+    assert DEFAULT_GITHUB_REPO == "RahulRedkar/PedneSewaTrustEmploymentRegistry"
+    assert "pedne-sewa-trust" not in GITHUB_REPO_SLUG.lower()
+
+    thread = UpdateCheckThread()
+    assert thread.repo_slug == "RahulRedkar/PedneSewaTrustEmploymentRegistry"
+
+    mock_resp = MagicMock()
+    mock_resp.status = 200
+    mock_resp.read.return_value = json.dumps({"tag_name": "v2.0.1", "assets": []}).encode("utf-8")
+    mock_resp.__enter__.return_value = mock_resp
+
+    captured = []
+    with patch("urllib.request.urlopen", side_effect=lambda req, timeout=10.0: (captured.append(req), mock_resp)[1]):
+        thread.run()
+
+    assert len(captured) == 1
+    assert captured[0].full_url == "https://api.github.com/repos/RahulRedkar/PedneSewaTrustEmploymentRegistry/releases/latest"
+    assert "pedne-sewa-trust" not in captured[0].full_url
 
 def test_github_authenticated_api_request(qapp):
     """Verifies that GITHUB_UPDATE_TOKEN adds Authorization: Bearer header to GitHub API calls."""
