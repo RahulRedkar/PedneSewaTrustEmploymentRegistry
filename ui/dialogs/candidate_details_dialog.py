@@ -161,6 +161,15 @@ class CandidateDetailsDialog(QDialog):
             layout.addLayout(self._create_row("Previous Experience", emp.previous_experience))
             layout.addLayout(self._create_row("Current Salary", f"₹{emp.current_salary:,.0f}" if emp.current_salary else ""))
         elif emp.status == "UNEMPLOYED":
+            has_exp = bool((emp.years_experience and emp.years_experience > 0) or (emp.previous_experience and emp.previous_experience.strip()))
+            if has_exp:
+                exp_str = f"Experienced ({emp.years_experience} yrs)" if emp.years_experience else "Experienced"
+                layout.addLayout(self._create_row("Work Experience", exp_str))
+                if emp.previous_experience:
+                    layout.addLayout(self._create_row("Previous Experience", emp.previous_experience))
+            else:
+                layout.addLayout(self._create_row("Work Experience", "Fresher (No Previous Work Experience)"))
+
             layout.addLayout(self._create_row("Government Status", "Applied for Government Employment" if emp.govt_applied else "Never Applied"))
             if emp.govt_applied:
                 layout.addLayout(self._create_row("Post / Exam Applied", emp.govt_post_exam))

@@ -327,6 +327,34 @@ class CandidateFormView(QWidget):
         f_unemp = QFormLayout(self.panel_unemployed)
         f_unemp.setSpacing(10)
 
+        # Previous Work Experience
+        self.combo_unemp_has_exp = QComboBox(self.panel_unemployed)
+        self.combo_unemp_has_exp.addItems([
+            "Fresher (No Previous Work Experience)",
+            "Experienced (Has Previous Work Experience)"
+        ])
+        self.combo_unemp_has_exp.currentIndexChanged.connect(self._on_unemp_exp_changed)
+        f_unemp.addRow("Previous Experience Status:", self.combo_unemp_has_exp)
+
+        self.box_unemp_exp_fields = QWidget(self.panel_unemployed)
+        f_unemp_exp = QFormLayout(self.box_unemp_exp_fields)
+        f_unemp_exp.setContentsMargins(0, 0, 0, 0)
+        f_unemp_exp.setSpacing(10)
+
+        self.edit_unemp_years = QDoubleSpinBox(self.box_unemp_exp_fields)
+        self.edit_unemp_years.setRange(0, 60)
+        self.edit_unemp_years.setDecimals(1)
+        self.edit_unemp_years.setSuffix(" yrs")
+        f_unemp_exp.addRow("Years of Experience:", self.edit_unemp_years)
+
+        self.edit_unemp_prev = QLineEdit(self.box_unemp_exp_fields)
+        self.edit_unemp_prev.setPlaceholderText("Previous organisations, roles, or designations held")
+        f_unemp_exp.addRow("Previous Organisation / Role:", self.edit_unemp_prev)
+
+        f_unemp.addRow(self.box_unemp_exp_fields)
+        self.box_unemp_exp_fields.hide()
+
+        # Government Status
         self.combo_unemp_applied = QComboBox(self.panel_unemployed)
         self.combo_unemp_applied.addItems(["Never Applied for Government Job", "Applied for Government Employment"])
         self.combo_unemp_applied.currentIndexChanged.connect(self._on_govt_applied_changed)
@@ -587,12 +615,22 @@ class CandidateFormView(QWidget):
         self.panel_self_emp.setVisible(status == "SELF_EMPLOYED")
         self.panel_student.setVisible(status == "STUDENT")
 
+    def _on_unemp_exp_changed(self, idx: int):
+        self.box_unemp_exp_fields.setVisible(idx == 1)
+
     def _on_govt_applied_changed(self, idx: int):
         self.box_govt_fields.setVisible(idx == 1)
 
     def _on_save_clicked(self):
         """Validates intake form, performs duplicate check, and saves to SQLite."""
         status = self.status_selector.get_status()
+
+        if status == "EMPLOYED":
+            years_exp = self.edit_emp_years.value()
+        elif status == "UNEMPLOYED":
+            years_exp = self.edit_unemp_years.value() if self.combo_unemp_has_exp.currentIndex() == 1 else 0.0
+        else:
+            years_exp = 0.0
 
         payload = {
             "full_name": self.edit_name.text().strip(),
@@ -603,7 +641,7 @@ class CandidateFormView(QWidget):
             "pincode": self.edit_pincode.text().strip(),
             "employment_status": status,
             "age": self.edit_age.value() if self.edit_age.value() > 0 else None,
-            "years_experience": self.edit_emp_years.value() if status == "EMPLOYED" else 0.0
+            "years_experience": years_exp
         }
 
         # 1. Validation
@@ -685,6 +723,13 @@ class CandidateFormView(QWidget):
             cand.employment.previous_experience = self.edit_emp_prev.text().strip()
             cand.employment.current_salary = self.edit_emp_salary.value() if self.edit_emp_salary.value() > 0 else None
         elif status == "UNEMPLOYED":
+            if self.combo_unemp_has_exp.currentIndex() == 1:
+                cand.employment.years_experience = self.edit_unemp_years.value()
+                cand.employment.previous_experience = self.edit_unemp_prev.text().strip()
+            else:
+                cand.employment.years_experience = 0.0
+                cand.employment.previous_experience = ""
+
             applied = (self.combo_unemp_applied.currentIndex() == 1)
             cand.employment.govt_applied = applied
             if applied:
@@ -779,6 +824,10 @@ class CandidateFormView(QWidget):
 
         # Employment
         self.status_selector.set_status("UNEMPLOYED")
+        self.combo_unemp_has_exp.setCurrentIndex(0)
+        self.box_unemp_exp_fields.hide()
+        self.edit_unemp_years.setValue(0.0)
+        self.edit_unemp_prev.clear()
         self.combo_unemp_applied.setCurrentIndex(0)
         self.box_govt_fields.hide()
         self.edit_govt_post.clear()

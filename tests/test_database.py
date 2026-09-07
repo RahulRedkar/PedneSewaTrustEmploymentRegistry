@@ -116,3 +116,40 @@ def test_delete_candidate(repo):
 
     repo.delete_candidate(c.candidate_id)
     assert repo.get_candidate(c.candidate_id) is None
+
+
+def test_unemployed_candidate_with_previous_experience(repo):
+    c = Candidate(
+        full_name="Santosh Parab",
+        mobile="9822998877",
+        village="Mandrem",
+        employment=Employment(
+            status="UNEMPLOYED",
+            years_experience=3.5,
+            previous_experience="Accountant at ABC Logistics",
+            govt_applied=True,
+            govt_post_exam="Junior Assistant",
+            govt_department="Directorate of Accounts",
+            govt_result_status="Awaiting Result"
+        )
+    )
+    saved = repo.save_candidate(c)
+    assert saved.candidate_id.startswith("PST-")
+
+    retrieved = repo.get_candidate(saved.candidate_id)
+    assert retrieved is not None
+    assert retrieved.employment.status == "UNEMPLOYED"
+    assert retrieved.employment.years_experience == 3.5
+    assert retrieved.employment.previous_experience == "Accountant at ABC Logistics"
+    assert retrieved.employment.govt_applied is True
+    assert retrieved.employment.govt_post_exam == "Junior Assistant"
+
+    # Test update
+    retrieved.employment.years_experience = 4.0
+    retrieved.employment.previous_experience = "Senior Accountant at ABC Logistics"
+    repo.update_candidate(retrieved)
+
+    updated = repo.get_candidate(saved.candidate_id)
+    assert updated.employment.years_experience == 4.0
+    assert updated.employment.previous_experience == "Senior Accountant at ABC Logistics"
+

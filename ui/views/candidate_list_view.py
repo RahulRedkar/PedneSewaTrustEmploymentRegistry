@@ -181,6 +181,7 @@ class CandidateListView(QWidget):
                     f"{c.candidate_id} {c.full_name} {c.mobile} {c.alternate_mobile} {c.email} "
                     f"{c.village} {c.address} {c.education.highest_qualification} {c.education.degree_course} "
                     f"{c.education.skills} {c.employment.department_company} {c.employment.designation} "
+                    f"{c.employment.previous_experience} "
                     f"{c.employment.govt_post_exam} {c.employment.self_emp_business_nature} "
                     f"{c.preferences.preferred_sector} {c.preferences.preferred_role}"
                 ).lower()
@@ -238,10 +239,17 @@ class CandidateListView(QWidget):
                 org = f" at {c.employment.department_company}" if c.employment.department_company else ""
                 detail_summary = f"{role}{org}"
             elif c.employment.status == "UNEMPLOYED":
+                has_prev = bool((c.employment.years_experience and c.employment.years_experience > 0) or (c.employment.previous_experience and c.employment.previous_experience.strip()))
+                exp_prefix = ""
+                if has_prev:
+                    yrs = f"{c.employment.years_experience} yrs" if c.employment.years_experience else "Exp"
+                    role_or_org = f" ({c.employment.previous_experience})" if c.employment.previous_experience else ""
+                    exp_prefix = f"Prev Exp: {yrs}{role_or_org} | "
+
                 if c.employment.govt_applied:
-                    detail_summary = f"Applied: {c.employment.govt_post_exam or 'Govt Exam'} ({c.employment.govt_result_status or 'Awaiting'})"
+                    detail_summary = f"{exp_prefix}Applied: {c.employment.govt_post_exam or 'Govt Exam'} ({c.employment.govt_result_status or 'Awaiting'})"
                 else:
-                    detail_summary = "Never Applied for Govt"
+                    detail_summary = f"{exp_prefix}Never Applied for Govt" if has_prev else "Never Applied for Govt"
             elif c.employment.status == "SELF_EMPLOYED":
                 detail_summary = f"Business: {c.employment.self_emp_business_nature or 'Local Venture'}"
             elif c.employment.status == "STUDENT":

@@ -243,6 +243,34 @@ class CandidateEditDialog(QDialog):
         self.box_unemployed = QGroupBox("Unemployed Details", w)
         unemp_form = QFormLayout(self.box_unemployed)
         unemp_form.setSpacing(10)
+
+        # Unemployed Previous Work Experience
+        self.combo_unemp_has_exp = QComboBox(w)
+        self.combo_unemp_has_exp.addItems([
+            "Fresher (No Previous Work Experience)",
+            "Experienced (Has Previous Work Experience)"
+        ])
+        self.combo_unemp_has_exp.currentIndexChanged.connect(lambda idx: self.box_unemp_exp_fields.setVisible(idx == 1))
+
+        self.box_unemp_exp_fields = QWidget(self.box_unemployed)
+        f_unemp_exp = QFormLayout(self.box_unemp_exp_fields)
+        f_unemp_exp.setContentsMargins(0, 0, 0, 0)
+        f_unemp_exp.setSpacing(10)
+
+        self.edit_unemp_exp = QDoubleSpinBox(w)
+        self.edit_unemp_exp.setRange(0, 70)
+        self.edit_unemp_exp.setDecimals(1)
+        self.edit_unemp_exp.setSuffix(" yrs")
+        f_unemp_exp.addRow("Years of Experience:", self.edit_unemp_exp)
+
+        self.edit_unemp_prev = QLineEdit(w)
+        self.edit_unemp_prev.setPlaceholderText("Previous organisations, roles, or designations held")
+        f_unemp_exp.addRow("Previous Organisation / Role:", self.edit_unemp_prev)
+
+        unemp_form.addRow("Previous Experience Status:", self.combo_unemp_has_exp)
+        unemp_form.addRow(self.box_unemp_exp_fields)
+        self.box_unemp_exp_fields.hide()
+
         self.combo_govt_applied = QComboBox(w)
         self.combo_govt_applied.addItems(["Never Applied for Government Job", "Applied for Government Employment"])
         self.combo_govt_applied.currentIndexChanged.connect(lambda idx: self.box_govt_fields.setVisible(idx == 1))
@@ -503,6 +531,12 @@ class CandidateEditDialog(QDialog):
         self.edit_govt_dept.setText(emp.govt_department)
         self.combo_govt_status.setCurrentText(emp.govt_result_status)
 
+        has_unemp_exp = bool((emp.years_experience and emp.years_experience > 0) or (emp.previous_experience and emp.previous_experience.strip()))
+        self.combo_unemp_has_exp.setCurrentIndex(1 if has_unemp_exp else 0)
+        self.box_unemp_exp_fields.setVisible(has_unemp_exp)
+        self.edit_unemp_exp.setValue(emp.years_experience or 0.0)
+        self.edit_unemp_prev.setText(emp.previous_experience or "")
+
         self.edit_self_nature.setText(emp.self_emp_business_nature)
         self.edit_self_loc.setText(emp.self_emp_location)
         if emp.self_emp_monthly_income:
@@ -539,6 +573,13 @@ class CandidateEditDialog(QDialog):
     def _on_save(self):
         status = self.status_selector.get_status()
 
+        if status == "EMPLOYED":
+            years_exp = self.edit_emp_exp.value()
+        elif status == "UNEMPLOYED":
+            years_exp = self.edit_unemp_exp.value() if self.combo_unemp_has_exp.currentIndex() == 1 else 0.0
+        else:
+            years_exp = 0.0
+
         payload = {
             "full_name": self.edit_name.text().strip(),
             "mobile": self.edit_mobile.text().strip(),
@@ -548,7 +589,7 @@ class CandidateEditDialog(QDialog):
             "pincode": self.edit_pincode.text().strip(),
             "employment_status": status,
             "age": self.edit_age.value() if self.edit_age.value() > 0 else None,
-            "years_experience": self.edit_emp_exp.value() if status == "EMPLOYED" else 0.0
+            "years_experience": years_exp
         }
 
         is_valid, errors = validate_candidate_form(payload)
@@ -591,6 +632,13 @@ class CandidateEditDialog(QDialog):
             c.employment.previous_experience = self.edit_emp_prev.text().strip()
             c.employment.current_salary = self.edit_emp_salary.value() if self.edit_emp_salary.value() > 0 else None
         elif status == "UNEMPLOYED":
+            if self.combo_unemp_has_exp.currentIndex() == 1:
+                c.employment.years_experience = self.edit_unemp_exp.value()
+                c.employment.previous_experience = self.edit_unemp_prev.text().strip()
+            else:
+                c.employment.years_experience = 0.0
+                c.employment.previous_experience = ""
+
             applied = (self.combo_govt_applied.currentIndex() == 1)
             c.employment.govt_applied = applied
             c.employment.govt_post_exam = self.edit_govt_post.text().strip() if applied else ""
