@@ -265,6 +265,22 @@ CREATE TABLE IF NOT EXISTS private_job_applications (
     FOREIGN KEY(candidate_id) REFERENCES candidates(candidate_id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS visiting_register (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sr_no INTEGER NOT NULL UNIQUE,
+    visit_date TEXT NOT NULL,
+    visit_time TEXT NOT NULL,
+    candidate_name TEXT NOT NULL,
+    village TEXT NOT NULL,
+    mobile TEXT NOT NULL,
+    purpose TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    sync_status TEXT NOT NULL DEFAULT 'PENDING',
+    last_synced_at TEXT,
+    is_deleted INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY,
     applied_at TEXT NOT NULL,
@@ -289,13 +305,17 @@ CREATE INDEX IF NOT EXISTS idx_candidate_consent ON candidate_consent(consent_st
 CREATE INDEX IF NOT EXISTS idx_shares_recruiter ON recruiter_candidate_shares(recruiter_id);
 CREATE INDEX IF NOT EXISTS idx_shares_candidate ON recruiter_candidate_shares(candidate_id);
 CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_visiting_sr_no ON visiting_register(sr_no);
+CREATE INDEX IF NOT EXISTS idx_visiting_date ON visiting_register(visit_date);
+CREATE INDEX IF NOT EXISTS idx_visiting_sync ON visiting_register(sync_status);
+CREATE INDEX IF NOT EXISTS idx_visiting_mobile ON visiting_register(mobile);
 """
 
 
 class MigrationManager:
     """Manages versioned database schema migrations with automated pre-migration backups."""
 
-    CURRENT_VERSION = 4
+    CURRENT_VERSION = 5
 
     @staticmethod
     def get_current_version(conn: sqlite3.Connection) -> int:
@@ -414,6 +434,43 @@ class MigrationManager:
                 conn.rollback()
                 logger.error("Migration to v4 failed: %s", e)
                 raise e
+
+        if current_v < 5:
+            try:
+                cursor.execute("BEGIN IMMEDIATE TRANSACTION;")
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS visiting_register (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        sr_no INTEGER NOT NULL UNIQUE,
+                        visit_date TEXT NOT NULL,
+                        visit_time TEXT NOT NULL,
+                        candidate_name TEXT NOT NULL,
+                        village TEXT NOT NULL,
+                        mobile TEXT NOT NULL,
+                        purpose TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        updated_at TEXT NOT NULL,
+                        sync_status TEXT NOT NULL DEFAULT 'PENDING',
+                        last_synced_at TEXT,
+                        is_deleted INTEGER NOT NULL DEFAULT 0
+                    );
+                """)
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_visiting_sr_no ON visiting_register(sr_no);")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_visiting_date ON visiting_register(visit_date);")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_visiting_sync ON visiting_register(sync_status);")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_visiting_mobile ON visiting_register(mobile);")
+                cursor.execute(
+                    "INSERT OR REPLACE INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
+                    (5, now_str, "Add visiting_register table for visitor tracking and walk-in registry")
+                )
+                conn.commit()
+                current_v = 5
+                logger.info("Successfully applied database migration to version %d", current_v)
+            except Exception as e:
+                conn.rollback()
+                logger.error("Migration to v5 failed: %s", e)
+                raise e
+
 
 
 def init_database(conn: sqlite3.Connection):

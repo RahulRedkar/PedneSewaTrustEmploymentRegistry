@@ -21,6 +21,7 @@ from models.facilitation import (
     Recruiter, CandidateConsent, RecruiterCandidateShare,
     GovernmentJobApplication, PrivateJobApplication, AuditEntry
 )
+from models.visitor import VisitorRecord
 from utils.logger import logger
 from utils.validators import clean_mobile
 
@@ -1726,6 +1727,241 @@ class CandidateRepository:
                     notes=row["notes"] or ""
                 ))
         return apps
+
+    # ==============================================================================
+    # Visiting Register Operations
+    # ==============================================================================
+
+    def get_next_visitor_sr_no(self, conn: Optional[sqlite3.Connection] = None) -> int:
+        """Returns the next sequential Sr No for visiting register (1, 2, 3...)."""
+        query = "SELECT COALESCE(MAX(sr_no), 0) + 1 FROM visiting_register WHERE is_deleted = 0"
+        if conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            row = cursor.fetchone()
+            return int(row[0]) if row and row[0] is not None else 1
+
+        with self.db.get_connection() as c:
+            cursor = c.cursor()
+            cursor.execute(query)
+            row = cursor.fetchone()
+            return int(row[0]) if row and row[0] is not None else 1
+
+    def save_visitor(self, visitor: VisitorRecord) -> int:
+        """
+        Saves a new visitor record with an auto-assigned sequential Sr No.
+        Returns the assigned record ID.
+        """
+        now_iso = datetime.now().isoformat()
+        with self.db.transaction() as conn:
+            if not visitor.sr_no or visitor.sr_no <= 0:
+                visitor.sr_no = self.get_next_visitor_sr_no(conn)
+            if not visitor.created_at:
+                visitor.created_at = now_iso
+            visitor.updated_at = now_iso
+
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO visiting_register (
+                    sr_no, visit_date, visit_time, candidate_name, village,
+                    mobile, purpose, created_at, updated_at, sync_status,
+                    last_synced_at, is_deleted
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    visitor.sr_no, visitor.visit_date, visitor.visit_time,
+                    visitor.candidate_name, visitor.village, visitor.mobile,
+                    visitor.purpose, visitor.created_at, visitor.updated_at,
+                    visitor.sync_status, visitor.last_synced_at, visitor.is_deleted
+                )
+            )
+            visitor.id = cursor.lastrowid
+            logger.info("Saved visitor Sr No. %d (ID %d) to Visiting Register", visitor.sr_no, visitor.id)
+            return visitor.id
+
+    def update_visitor(self, visitor: VisitorRecord) -> bool:
+        """Updates an existing visitor entry in the Visiting Register."""
+        if not visitor.id:
+            return False
+        now_iso = datetime.now().isoformat()
+        visitor.updated_at = now_iso
+        visitor.sync_status = SYNC_STATUS_PENDING
+        with self.db.transaction() as conn:
+            conn.execute(
+                """
+                UPDATE visiting_register SET
+                    visit_date = ?, visit_time = ?, candidate_name = ?,
+                    village = ?, mobile = ?, purpose = ?, updated_at = ?,
+                    sync_status = ?
+                WHERE id = ?
+                """,
+                (
+                    visitor.visit_date, visitor.visit_time, visitor.candidate_name,
+                    visitor.village, visitor.mobile, visitor.purpose,
+                    visitor.updated_at, visitor.sync_status, visitor.id
+                )
+            )
+        logger.info("Updated visitor ID %d in Visiting Register", visitor.id)
+        return True
+
+    def delete_visitor(self, visitor_id: int) -> bool:
+        """Soft-deletes a visitor entry from the Visiting Register."""
+        now_iso = datetime.now().isoformat()
+        with self.db.transaction() as conn:
+            conn.execute(
+                f"UPDATE visiting_register SET is_deleted = 1, updated_at = ?, sync_status = '{SYNC_STATUS_PENDING}' WHERE id = ?",
+                (now_iso, visitor_id)
+            )
+        logger.info("Soft-deleted visitor ID %d from Visiting Register", visitor_id)
+        return True
+
+    def get_all_visitors(self, include_deleted: bool = False) -> List[VisitorRecord]:
+        """Retrieves all visitor entries ordered by sr_no DESC."""
+        sql = "SELECT * FROM visiting_register"
+        if not include_deleted:
+            sql += " WHERE is_deleted = 0"
+        sql += " ORDER BY sr_no DESC, id DESC"
+
+        visitors = []
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(sql)
+            for row in cursor.fetchall():
+                visitors.append(VisitorRecord.from_row(row))
+        return visitors
+
+    def get_visitor_by_id(self, visitor_id: int) -> Optional[VisitorRecord]:
+        """Retrieves a single visitor entry by SQLite primary key."""
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM visiting_register WHERE id = ?", (visitor_id,))
+            row = cursor.fetchone()
+            if row:
+                return VisitorRecord.from_row(row)
+        return None
+
+    def search_visitors(self, query: str = "", date_filter: str = "", village_filter: str = "") -> List[VisitorRecord]:
+        """Filters visitors by search terms, date, or village."""
+        sql = "SELECT * FROM visiting_register WHERE is_deleted = 0"
+        params = []
+
+        if query:
+            q = f"%{query.strip()}%"
+            sql += " AND (candidate_name LIKE ? OR mobile LIKE ? OR purpose LIKE ? OR CAST(sr_no AS TEXT) LIKE ?)"
+            params.extend([q, q, q, q])
+
+        if date_filter:
+            sql += " AND visit_date = ?"
+            params.append(date_filter.strip())
+
+        if village_filter:
+            sql += " AND village = ?"
+            params.append(village_filter.strip())
+
+        sql += " ORDER BY sr_no DESC, id DESC"
+
+        visitors = []
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(sql, params)
+            for row in cursor.fetchall():
+                visitors.append(VisitorRecord.from_row(row))
+        return visitors
+
+    def get_pending_sync_visitors(self) -> List[VisitorRecord]:
+        """Returns all visitor entries requiring cloud synchronisation."""
+        sql = f"SELECT * FROM visiting_register WHERE sync_status IN ('{SYNC_STATUS_PENDING}', '{SYNC_STATUS_FAILED}') AND is_deleted = 0 ORDER BY sr_no ASC"
+        visitors = []
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(sql)
+            for row in cursor.fetchall():
+                visitors.append(VisitorRecord.from_row(row))
+        return visitors
+
+    def mark_visitors_synced(self, visitor_ids: List[int], synced_at: str):
+        """Marks visitor entries as SYNCED with timestamp."""
+        if not visitor_ids:
+            return
+        with self.db.transaction() as conn:
+            placeholders = ",".join(["?"] * len(visitor_ids))
+            sql = f"UPDATE visiting_register SET sync_status = '{SYNC_STATUS_SYNCED}', last_synced_at = ? WHERE id IN ({placeholders})"
+            params = [synced_at] + visitor_ids
+            conn.execute(sql, params)
+        logger.info("Marked %d visitors as SYNCED", len(visitor_ids))
+
+    def get_visitors_summary_counts(self) -> Dict[str, int]:
+        """Returns counts for Today, This Month, and All-Time."""
+        today = datetime.now().strftime("%Y-%m-%d")
+        month_prefix = datetime.now().strftime("%Y-%m")
+        counts = {"today": 0, "this_month": 0, "total": 0, "pending_sync": 0}
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM visiting_register WHERE is_deleted = 0 AND visit_date = ?", (today,))
+            counts["today"] = cursor.fetchone()[0] or 0
+
+            cursor.execute("SELECT COUNT(*) FROM visiting_register WHERE is_deleted = 0 AND visit_date LIKE ?", (f"{month_prefix}%",))
+            counts["this_month"] = cursor.fetchone()[0] or 0
+
+            cursor.execute("SELECT COUNT(*) FROM visiting_register WHERE is_deleted = 0")
+            counts["total"] = cursor.fetchone()[0] or 0
+
+            cursor.execute(f"SELECT COUNT(*) FROM visiting_register WHERE is_deleted = 0 AND sync_status IN ('{SYNC_STATUS_PENDING}', '{SYNC_STATUS_FAILED}')")
+            counts["pending_sync"] = cursor.fetchone()[0] or 0
+        return counts
+
+    def bulk_import_visitors(self, visitors_data: List[Dict[str, Any]]) -> Dict[str, int]:
+        """
+        Batch imports visitor records from Excel or CSV.
+        Auto-assigns sequential Sr No if missing or conflicting.
+        Returns dict with inserted and skipped counts.
+        """
+        inserted = 0
+        skipped = 0
+        now_iso = datetime.now().isoformat()
+        with self.db.transaction() as conn:
+            for item in visitors_data:
+                name = str(item.get("candidate_name") or "").strip()
+                if not name:
+                    skipped += 1
+                    continue
+                sr_no_val = item.get("sr_no")
+                try:
+                    sr_no = int(sr_no_val) if sr_no_val is not None and str(sr_no_val).strip() != "" else 0
+                except (ValueError, TypeError):
+                    sr_no = 0
+
+                if sr_no <= 0:
+                    sr_no = self.get_next_visitor_sr_no(conn)
+                else:
+                    cursor = conn.cursor()
+                    cursor.execute("SELECT id FROM visiting_register WHERE sr_no = ?", (sr_no,))
+                    if cursor.fetchone():
+                        sr_no = self.get_next_visitor_sr_no(conn)
+
+                visit_date = str(item.get("visit_date") or datetime.now().strftime("%Y-%m-%d")).strip()
+                visit_time = str(item.get("visit_time") or datetime.now().strftime("%I:%M %p")).strip()
+                village = str(item.get("village") or "").strip()
+                mobile = clean_mobile(str(item.get("mobile") or "")) if item.get("mobile") else ""
+                purpose = str(item.get("purpose") or "General Inquiry").strip()
+
+                conn.execute(
+                    """
+                    INSERT INTO visiting_register (
+                        sr_no, visit_date, visit_time, candidate_name, village,
+                        mobile, purpose, created_at, updated_at, sync_status,
+                        last_synced_at, is_deleted
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        sr_no, visit_date, visit_time, name, village, mobile,
+                        purpose, now_iso, now_iso, SYNC_STATUS_PENDING, None, 0
+                    )
+                )
+                inserted += 1
+        logger.info("Bulk imported %d visitors (%d skipped)", inserted, skipped)
+        return {"inserted": inserted, "skipped": skipped}
 
 
 repository = CandidateRepository()

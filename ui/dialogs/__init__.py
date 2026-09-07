@@ -1,3 +1,4 @@
 from .duplicate_dialog import DuplicateCandidateDialog
 from .candidate_details_dialog import CandidateDetailsDialog
 from .candidate_edit_dialog import CandidateEditDialog
+from .log_visit_dialog import LogVisitDialog

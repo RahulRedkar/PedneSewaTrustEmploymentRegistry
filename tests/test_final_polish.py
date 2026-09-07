@@ -65,11 +65,11 @@ def test_no_private_jobs_in_ui(qapp):
     sb = Sidebar()
     button_texts = [btn.text() for btn in sb.buttons]
     assert "Private Jobs" not in button_texts
-    assert len(button_texts) == 8
+    assert len(button_texts) == 9
 
-    # 2. MainWindow stack has 8 views matching Sidebar
+    # 2. MainWindow stack has 9 views matching Sidebar
     win = MainWindow()
-    assert win.stack.count() == 8
+    assert win.stack.count() == 9
     assert not hasattr(win, "private_jobs_view")
 
     # 3. Dashboard has no private job metric rows

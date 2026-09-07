@@ -102,3 +102,11 @@ class AppIcons:
     def match() -> QIcon:
         return get_icon(QStyle.StandardPixmap.SP_DialogApplyButton)
 
+    @staticmethod
+    def visiting_register() -> QIcon:
+        return get_icon(QStyle.StandardPixmap.SP_FileDialogListView)
+
+    @staticmethod
+    def import_file() -> QIcon:
+        return get_icon(QStyle.StandardPixmap.SP_ArrowUp)
+

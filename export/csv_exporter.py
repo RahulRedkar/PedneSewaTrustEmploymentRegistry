@@ -9,10 +9,16 @@ import os
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
-from app.constants import GOOGLE_SHEETS_COLUMNS, SYNC_STATUS_PENDING, SYNC_STATUS_FAILED
+from app.constants import (
+    GOOGLE_SHEETS_COLUMNS,
+    VISITING_REGISTER_COLUMNS,
+    SYNC_STATUS_PENDING,
+    SYNC_STATUS_FAILED
+)
 from app.config import config
 from database.repository import repository
 from models.candidate import Candidate
+from models.visitor import VisitorRecord
 from utils.logger import logger
 
 
@@ -66,6 +72,35 @@ class CSVExporter:
     def export_filtered(self, candidates: List[Candidate], target_filepath: Optional[str] = None) -> str:
         """Exports the currently filtered candidate list from UI."""
         return self.export_candidates(candidates, target_filepath, export_label="filtered")
+
+    def export_visitors(
+        self,
+        visitors: List[VisitorRecord],
+        target_filepath: Optional[str] = None,
+        export_label: str = "visiting_register"
+    ) -> str:
+        """
+        Exports a given list of visitor records to a clean UTF-8 CSV file with BOM.
+        """
+        if not target_filepath:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"PST_{export_label}_{timestamp}.csv"
+            target_filepath = str(self.export_dir / filename)
+
+        try:
+            with open(target_filepath, mode="w", newline="", encoding="utf-8-sig") as f:
+                writer = csv.writer(f, quoting=csv.QUOTE_MINIMAL)
+                writer.writerow(VISITING_REGISTER_COLUMNS)
+
+                for vis in visitors:
+                    writer.writerow(vis.to_row_list())
+
+            logger.info("Successfully exported %d visitors to %s", len(visitors), target_filepath)
+            return target_filepath
+        except Exception as e:
+            logger.error("Failed to export visiting register to CSV: %s", e)
+            raise e
+
 
 
 csv_exporter = CSVExporter()

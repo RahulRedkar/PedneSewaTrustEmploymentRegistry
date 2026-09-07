@@ -75,8 +75,21 @@ var CANONICAL_COLUMNS = [
   { key: "updated_at", header: "Updated At" }
 ];
 
+// 9 Canonical Visiting Register Column Definitions
+var VISITING_CANONICAL_COLUMNS = [
+  { key: "sr_no", header: "Sr No." },
+  { key: "visit_date", header: "Date" },
+  { key: "visit_time", header: "Time" },
+  { key: "candidate_name", header: "Name of Candidate" },
+  { key: "village", header: "Address (Village)" },
+  { key: "mobile", header: "Mobile No." },
+  { key: "purpose", header: "Purpose of Visit" },
+  { key: "created_at", header: "Created At" },
+  { key: "updated_at", header: "Updated At" }
+];
+
 /**
- * HTTP POST entrypoint for incoming candidate backup transmissions.
+ * HTTP POST entrypoint for incoming candidate and visitor backup transmissions.
  */
 function doPost(e) {
   var lock = LockService.getScriptLock();
@@ -110,23 +123,41 @@ function doPost(e) {
       }
     }
 
-    var sheetName = "Candidates";
-    var sheet = ss.getSheetByName(sheetName);
-    if (!sheet) {
-      sheet = ss.insertSheet(sheetName);
+    // 1. Process Candidates
+    var candidates = payload.candidates || [];
+    var candResult = { inserted: 0, updated: 0, totalInSheet: 0 };
+    if (candidates.length > 0) {
+      var candSheet = ss.getSheetByName("Candidates");
+      if (!candSheet) {
+        candSheet = ss.insertSheet("Candidates");
+      }
+      candResult = upsertCandidates(candSheet, candidates);
     }
 
-    // 4. Upsert candidates into columnar tabular sheet
-    var candidates = payload.candidates || [];
-    var result = upsertCandidates(sheet, candidates);
+    // 2. Process Visiting Register
+    var visitors = payload.visitors || [];
+    var visitorResult = { inserted: 0, updated: 0, totalInSheet: 0 };
+    if (visitors.length > 0) {
+      var visitorSheet = ss.getSheetByName("Visiting Register");
+      if (!visitorSheet) {
+        visitorSheet = ss.insertSheet("Visiting Register");
+      }
+      visitorResult = upsertVisitors(visitorSheet, visitors);
+    }
 
+    var totalProcessed = candidates.length + visitors.length;
     return createJsonResponse({
       status: "SUCCESS",
       message: "Cloud backup completed successfully.",
-      records_processed: candidates.length,
-      records_inserted: result.inserted,
-      records_updated: result.updated,
-      total_records_in_sheet: result.totalInSheet,
+      records_processed: totalProcessed,
+      candidates_processed: candidates.length,
+      visitors_processed: visitors.length,
+      records_inserted: candResult.inserted + visitorResult.inserted,
+      records_updated: candResult.updated + visitorResult.updated,
+      details: {
+        candidates: candResult,
+        visitors: visitorResult
+      },
       timestamp: new Date().toISOString()
     }, 200);
 
@@ -346,6 +377,118 @@ function upsertCandidates(sheet, candidates) {
     updated: updatedCount,
     inserted: rowsToAppend.length,
     totalInSheet: Object.keys(idIndex).length
+  };
+}
+
+/**
+ * Extracts a visitor's values into a single array aligned with headers.
+ */
+function extractRowForVisitor(visitor, headers, keyMap) {
+  var row = [];
+  for (var i = 0; i < headers.length; i++) {
+    var header = headers[i];
+    var val = "";
+    var key = keyMap[header] || header.toLowerCase().replace(/[\s\/-]+/g, "_").trim();
+
+    if (visitor.hasOwnProperty(key) && visitor[key] !== null && visitor[key] !== undefined) {
+      val = visitor[key];
+    } else if (visitor.hasOwnProperty(header) && visitor[header] !== null && visitor[header] !== undefined) {
+      val = visitor[header];
+    } else {
+      for (var k in visitor) {
+        if (!visitor.hasOwnProperty(k)) continue;
+        var kNorm = k.toLowerCase().replace(/[\s_-]/g, "");
+        var hNorm = header.toLowerCase().replace(/[\s_-]/g, "");
+        var keyNorm = key.toLowerCase().replace(/[\s_-]/g, "");
+        if (kNorm === hNorm || kNorm === keyNorm) {
+          val = visitor[k];
+          break;
+        }
+      }
+    }
+
+    if (typeof val === "object" && val !== null) {
+      if (Array.isArray(val)) {
+        val = val.join(", ");
+      } else {
+        val = "";
+      }
+    }
+    row.push(val !== null && val !== undefined ? String(val) : "");
+  }
+  return row;
+}
+
+/**
+ * Upserts visiting register records into the 'Visiting Register' sheet:
+ * - Matches on Column A: Sr No.
+ * - Formats header row on first setup
+ * - Updates existing rows or appends new rows
+ */
+function upsertVisitors(sheet, visitors) {
+  var headerNames = VISITING_CANONICAL_COLUMNS.map(function(c) { return c.header; });
+  var keyMap = {};
+  for (var c = 0; c < VISITING_CANONICAL_COLUMNS.length; c++) {
+    keyMap[VISITING_CANONICAL_COLUMNS[c].header] = VISITING_CANONICAL_COLUMNS[c].key;
+  }
+
+  // 1. Initialize headers if sheet is empty or row 1 doesn't match
+  var lastRow = sheet.getLastRow();
+  var lastCol = sheet.getLastColumn();
+  if (lastRow === 0 || lastCol === 0) {
+    sheet.clear();
+    sheet.getRange(1, 1, 1, headerNames.length).setValues([headerNames]);
+    formatHeaderRow(sheet, headerNames.length);
+    lastRow = 1;
+    lastCol = headerNames.length;
+  }
+
+  var activeHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  // 2. Build Column A (Sr No.) index
+  var srNoIndex = {};
+  if (lastRow > 1) {
+    var srNoValues = sheet.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (var r = 0; r < srNoValues.length; r++) {
+      var sr = String(srNoValues[r][0] || "").trim();
+      if (sr) {
+        srNoIndex[sr] = r + 2;
+      }
+    }
+  }
+
+  var updatedCount = 0;
+  var rowsToAppend = [];
+
+  // 3. Process visitors
+  for (var i = 0; i < visitors.length; i++) {
+    var v = visitors[i];
+    var srNo = String(v.sr_no !== undefined && v.sr_no !== null ? v.sr_no : (v["Sr No."] || "")).trim();
+    if (!srNo) continue;
+
+    var rowValues = extractRowForVisitor(v, activeHeaders, keyMap);
+
+    if (srNoIndex.hasOwnProperty(srNo)) {
+      var targetRow = srNoIndex[srNo];
+      sheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
+      updatedCount++;
+    } else {
+      rowsToAppend.push(rowValues);
+      var newRow = lastRow + rowsToAppend.length;
+      srNoIndex[srNo] = newRow;
+    }
+  }
+
+  // 4. Batch append new visitor rows
+  if (rowsToAppend.length > 0) {
+    var startRow = lastRow + 1;
+    sheet.getRange(startRow, 1, rowsToAppend.length, activeHeaders.length).setValues(rowsToAppend);
+  }
+
+  return {
+    updated: updatedCount,
+    inserted: rowsToAppend.length,
+    totalInSheet: Object.keys(srNoIndex).length
   };
 }
 

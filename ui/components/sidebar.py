@@ -29,11 +29,12 @@ class Sidebar(QWidget):
             ("Dashboard", AppIcons.dashboard(), 0),
             ("Add Candidate", AppIcons.add_candidate(), 1),
             ("Candidate Database", AppIcons.database(), 2),
-            ("Government Jobs", AppIcons.gov_jobs(), 3),
-            ("Recruiters", AppIcons.recruiters(), 4),
-            ("Reports & Analytics", AppIcons.reports(), 5),
-            ("Backup / Export", AppIcons.backup(), 6),
-            ("Settings", AppIcons.settings(), 7)
+            ("Visiting Register", AppIcons.visiting_register(), 3),
+            ("Government Jobs", AppIcons.gov_jobs(), 4),
+            ("Recruiters", AppIcons.recruiters(), 5),
+            ("Reports & Analytics", AppIcons.reports(), 6),
+            ("Backup / Export", AppIcons.backup(), 7),
+            ("Settings", AppIcons.settings(), 8)
         ]
 
         for text, icon, index in nav_items:

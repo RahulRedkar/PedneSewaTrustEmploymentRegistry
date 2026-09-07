@@ -25,8 +25,21 @@ PREFIX_OFFICE_MAP = {
 # Google Sheets & Cloud Backup Configuration Defaults
 DEFAULT_SPREADSHEET_ID = "1DC9TY2D2_mJgyJJ_hM3a91UsSOuqssWiBuMKhaxoW_0"
 DEFAULT_WORKSHEET_NAME = "Candidates"
+DEFAULT_VISITING_WORKSHEET_NAME = "Visiting Register"
 DEFAULT_SYNC_INTERVAL_MINUTES = 10
 DEFAULT_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_YOUR_DEPLOYMENT_ID/exec"
+
+# Common Visit Purposes for Visiting Register
+VISIT_PURPOSES = [
+    "Employment Registration / Candidate Intake",
+    "Application Status Inquiry",
+    "Document Submission / Verification",
+    "Recruiter Interview / Facilitation",
+    "Government Scheme / Job Guidance",
+    "Certificate / Attestation Request",
+    "General Inquiry / Meeting",
+    "Other"
+]
 
 
 # Villages in Pernem (Pedne) Taluka, Goa
@@ -215,3 +228,17 @@ GOOGLE_SHEETS_COLUMNS = [
     "Updated At",
     "Sync Status"
 ]
+
+# Visiting Register Canonical Columns
+VISITING_REGISTER_COLUMNS = [
+    "Sr No.",
+    "Date",
+    "Time",
+    "Name of Candidate",
+    "Address (Village)",
+    "Mobile No.",
+    "Purpose of Visit",
+    "Created At",
+    "Updated At"
+]
+

@@ -18,6 +18,7 @@ from ui.components.toast import ToastNotification
 from ui.views.dashboard_view import DashboardView
 from ui.views.candidate_form_view import CandidateFormView
 from ui.views.candidate_list_view import CandidateListView
+from ui.views.visiting_register_view import VisitingRegisterView
 from ui.views.government_jobs_view import GovernmentJobsView
 from ui.views.recruiters_view import RecruitersView
 from ui.views.reports_view import ReportsView
@@ -84,6 +85,7 @@ class MainWindow(QMainWindow):
         self.dashboard_view = DashboardView(self)
         self.form_view = CandidateFormView(self)
         self.list_view = CandidateListView(self)
+        self.visiting_view = VisitingRegisterView(self)
         self.gov_jobs_view = GovernmentJobsView(self)
         self.recruiters_view = RecruitersView(self)
         self.reports_view = ReportsView(self)
@@ -93,11 +95,12 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.dashboard_view)   # 0
         self.stack.addWidget(self.form_view)        # 1
         self.stack.addWidget(self.list_view)        # 2
-        self.stack.addWidget(self.gov_jobs_view)    # 3
-        self.stack.addWidget(self.recruiters_view)  # 4
-        self.stack.addWidget(self.reports_view)     # 5
-        self.stack.addWidget(self.backup_view)      # 6
-        self.stack.addWidget(self.settings_view)    # 7
+        self.stack.addWidget(self.visiting_view)    # 3
+        self.stack.addWidget(self.gov_jobs_view)    # 4
+        self.stack.addWidget(self.recruiters_view)  # 5
+        self.stack.addWidget(self.reports_view)     # 6
+        self.stack.addWidget(self.backup_view)      # 7
+        self.stack.addWidget(self.settings_view)    # 8
 
         body_layout.addWidget(self.stack, 1)
         root_layout.addLayout(body_layout)

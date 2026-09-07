@@ -5,10 +5,11 @@ via HTTPS POST without requiring desktop Google OAuth or credentials files.
 """
 
 import os
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import requests
 from app.config import config
 from models.candidate import Candidate
+from models.visitor import VisitorRecord
 from utils.logger import logger
 
 
@@ -44,6 +45,17 @@ class AppsScriptClient:
     def push_candidates(self, candidates: List[Candidate]) -> Dict[str, Any]:
         """
         Sends candidate records to the Google Apps Script Web App endpoint.
+        Maintains backwards compatibility with existing callers.
+        """
+        return self.push_backup(candidates=candidates)
+
+    def push_backup(
+        self,
+        candidates: Optional[List[Candidate]] = None,
+        visitors: Optional[List[VisitorRecord]] = None
+    ) -> Dict[str, Any]:
+        """
+        Sends both Candidate records and Visiting Register records to the Google Apps Script Web App.
         Returns a dict indicating SUCCESS or FAILURE with status details.
         """
         if not self.is_configured():
@@ -58,22 +70,28 @@ class AppsScriptClient:
             logger.warning(msg)
             return {"status": "NOT_CONFIGURED", "records_pushed": 0, "error": msg}
 
-        if not candidates:
-            return {"status": "SUCCESS", "records_pushed": 0, "message": "No candidates to sync."}
+        cands = candidates or []
+        vis = visitors or []
+        total_records = len(cands) + len(vis)
+
+        if total_records == 0:
+            return {"status": "SUCCESS", "records_pushed": 0, "message": "No records to sync."}
 
         url = self.get_endpoint_url()
         api_key = self.get_api_key()
 
-        # Strict contract: only api_key and candidates with flattened individual properties
+        # Strict contract: api_key, candidates array, and visitors array
         payload = {
             "api_key": api_key,
-            "candidates": [
-                c.to_backup_dict() for c in candidates
-            ]
+            "candidates": [c.to_backup_dict() for c in cands],
+            "visitors": [v.to_backup_dict() for v in vis]
         }
 
         try:
-            logger.info("Sending %d candidate records to Google Apps Script gateway...", len(candidates))
+            logger.info(
+                "Sending %d candidate and %d visitor records to Google Apps Script gateway...",
+                len(cands), len(vis)
+            )
             response = requests.post(
                 url,
                 json=payload,
@@ -116,11 +134,16 @@ class AppsScriptClient:
             if is_success:
                 inserted = res_json.get("records_inserted", res_json.get("inserted", 0))
                 updated = res_json.get("records_updated", res_json.get("updated", 0))
-                processed = res_json.get("records_processed", res_json.get("processed", len(candidates)))
-                logger.info("Apps Script backup succeeded: %d processed (%d inserted, %d updated).", processed, inserted, updated)
+                processed = res_json.get("records_processed", res_json.get("processed", total_records))
+                logger.info(
+                    "Apps Script backup succeeded: %d processed (%d inserted, %d updated).",
+                    processed, inserted, updated
+                )
                 return {
                     "status": "SUCCESS",
-                    "records_pushed": len(candidates),
+                    "records_pushed": total_records,
+                    "candidates_pushed": len(cands),
+                    "visitors_pushed": len(vis),
                     "records_inserted": inserted,
                     "records_updated": updated,
                     "details": res_json
@@ -129,6 +152,7 @@ class AppsScriptClient:
                 err = res_json.get("message", res_json.get("error", "Apps Script returned non-success status."))
                 logger.error("Apps Script reported failure: %s", err)
                 return {"status": "FAILURE", "records_pushed": 0, "error": err}
+
 
         except requests.exceptions.Timeout:
             err = "Connection timed out while contacting cloud backup gateway. Data is safely stored locally."
