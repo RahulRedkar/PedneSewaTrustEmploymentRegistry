@@ -8,6 +8,7 @@ import os
 from typing import List, Dict, Any, Optional
 import requests
 from app.config import config
+from app.constants import DEFAULT_SPREADSHEET_ID
 from models.candidate import Candidate
 from models.visitor import VisitorRecord
 from utils.logger import logger
@@ -129,12 +130,28 @@ class AppsScriptClient:
                 logger.error("%s (Response: %s)", err, resp_text[:250])
                 return {"status": "FAILURE", "records_pushed": 0, "error": err}
 
+            # Outdated deployment detection:
+            # If we sent visitors, but Apps Script returned "Nothing to backup" or 0 processed without visitor details,
+            # it means the live Apps Script deployment in Google Cloud has not been updated with the Visiting Register code.
+            inserted = res_json.get("records_inserted", res_json.get("inserted", 0))
+            updated = res_json.get("records_updated", res_json.get("updated", 0))
+            processed = res_json.get("records_processed", res_json.get("processed", 0))
+
+            if len(vis) > 0:
+                msg_str = str(res_json.get("message", "")).lower()
+                has_visitor_details = "visitors" in res_json or ("details" in res_json and "visitors" in res_json["details"])
+                if "nothing to backup" in msg_str or (processed == 0 and not has_visitor_details):
+                    err = (
+                        "Google Apps Script requires update in Google Sheets! "
+                        "The live web app is running an older deployment that does not support the Visiting Register. "
+                        "Please copy code from sync/google_apps_script.js into Extensions -> Apps Script -> Deploy -> Manage deployments -> New version."
+                    )
+                    logger.error(err)
+                    return {"status": "FAILURE", "records_pushed": 0, "error": err}
+
             # Validate success: accept status == "SUCCESS" or success == True
             is_success = (res_json.get("status") == "SUCCESS") or (res_json.get("success") is True)
             if is_success:
-                inserted = res_json.get("records_inserted", res_json.get("inserted", 0))
-                updated = res_json.get("records_updated", res_json.get("updated", 0))
-                processed = res_json.get("records_processed", res_json.get("processed", total_records))
                 logger.info(
                     "Apps Script backup succeeded: %d processed (%d inserted, %d updated).",
                     processed, inserted, updated

@@ -268,6 +268,7 @@ CREATE TABLE IF NOT EXISTS private_job_applications (
 CREATE TABLE IF NOT EXISTS visiting_register (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sr_no INTEGER NOT NULL UNIQUE,
+    intake_office TEXT NOT NULL DEFAULT 'Pernem',
     visit_date TEXT NOT NULL,
     visit_time TEXT NOT NULL,
     candidate_name TEXT NOT NULL,
@@ -316,7 +317,7 @@ CREATE INDEX IF NOT EXISTS idx_visiting_mobile ON visiting_register(mobile);
 class MigrationManager:
     """Manages versioned database schema migrations with automated pre-migration backups."""
 
-    CURRENT_VERSION = 6
+    CURRENT_VERSION = 7
 
     @staticmethod
     def get_current_version(conn: sqlite3.Connection) -> int:
@@ -490,6 +491,27 @@ class MigrationManager:
                 conn.rollback()
                 logger.error("Migration to v6 failed: %s", e)
                 raise e
+
+        if current_v < 7:
+            try:
+                cursor.execute("BEGIN IMMEDIATE TRANSACTION;")
+                cursor.execute("PRAGMA table_info(visiting_register)")
+                vis_cols = [c[1] for c in cursor.fetchall()]
+                if "intake_office" not in vis_cols:
+                    cursor.execute("ALTER TABLE visiting_register ADD COLUMN intake_office TEXT NOT NULL DEFAULT 'Pernem';")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_visiting_office ON visiting_register(intake_office);")
+                cursor.execute(
+                    "INSERT OR REPLACE INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
+                    (7, now_str, "Add intake_office column to visiting_register (Pernem / Korgao)")
+                )
+                conn.commit()
+                current_v = 7
+                logger.info("Successfully applied database migration to version %d", current_v)
+            except Exception as e:
+                conn.rollback()
+                logger.error("Migration to v7 failed: %s", e)
+                raise e
+
 
 
 

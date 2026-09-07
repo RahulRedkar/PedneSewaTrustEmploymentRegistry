@@ -232,6 +232,7 @@ GOOGLE_SHEETS_COLUMNS = [
 # Visiting Register Canonical Columns
 VISITING_REGISTER_COLUMNS = [
     "Sr No.",
+    "Intake Office",
     "Date",
     "Time",
     "Name of Candidate",
@@ -242,4 +243,5 @@ VISITING_REGISTER_COLUMNS = [
     "Created At",
     "Updated At"
 ]
+
 

@@ -16,6 +16,7 @@ class VisitorRecord:
 
     id: Optional[int] = None
     sr_no: int = 0
+    intake_office: str = "Pernem"
     visit_date: str = field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d"))
     visit_time: str = field(default_factory=lambda: datetime.now().strftime("%I:%M %p"))
     candidate_name: str = ""
@@ -34,6 +35,7 @@ class VisitorRecord:
         return {
             "id": self.id,
             "sr_no": self.sr_no,
+            "intake_office": self.intake_office,
             "visit_date": self.visit_date,
             "visit_time": self.visit_time,
             "candidate_name": self.candidate_name,
@@ -55,6 +57,7 @@ class VisitorRecord:
         """
         return {
             "sr_no": self.sr_no,
+            "intake_office": self.intake_office,
             "visit_date": self.visit_date,
             "visit_time": self.visit_time,
             "candidate_name": self.candidate_name,
@@ -70,6 +73,7 @@ class VisitorRecord:
         """Returns row list aligned with export and table display columns."""
         return [
             str(self.sr_no),
+            self.intake_office,
             self.visit_date,
             self.visit_time,
             self.candidate_name,
@@ -88,6 +92,7 @@ class VisitorRecord:
         return cls(
             id=row["id"] if "id" in keys else None,
             sr_no=int(row["sr_no"]) if row["sr_no"] is not None else 0,
+            intake_office=row["intake_office"] if ("intake_office" in keys and row["intake_office"]) else "Pernem",
             visit_date=row["visit_date"] or "",
             visit_time=row["visit_time"] or "",
             candidate_name=row["candidate_name"] or "",

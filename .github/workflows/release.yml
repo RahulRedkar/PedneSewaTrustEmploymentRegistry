@@ -62,6 +62,9 @@ jobs:
           # Create release staging folder
           New-Item -ItemType Directory -Path "release-dist" -Force | Out-Null
 
+          # Ensure updater helper scripts are in distribution folder
+          Copy-Item -Path "Candidate.bat", "Update_To_Latest.bat" -Destination "dist\PedneSewaTrustRegistry\" -Force -ErrorAction SilentlyContinue
+
           # Complete Distribution ZIP containing the entire application directory
           $ZIP_NAME = "PedneSewaTrustRegistry-$TAG-Windows.zip"
           Compress-Archive -Path "dist\PedneSewaTrustRegistry\*" -DestinationPath "release-dist\$ZIP_NAME" -Force

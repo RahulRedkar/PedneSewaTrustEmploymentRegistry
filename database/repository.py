@@ -1759,25 +1759,27 @@ class CandidateRepository:
             if not visitor.created_at:
                 visitor.created_at = now_iso
             visitor.updated_at = now_iso
+            if not getattr(visitor, "intake_office", None):
+                visitor.intake_office = "Pernem"
 
             cursor = conn.cursor()
             cursor.execute(
                 """
                 INSERT INTO visiting_register (
-                    sr_no, visit_date, visit_time, candidate_name, village,
+                    sr_no, intake_office, visit_date, visit_time, candidate_name, village,
                     mobile, purpose, remarks, created_at, updated_at, sync_status,
                     last_synced_at, is_deleted
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    visitor.sr_no, visitor.visit_date, visitor.visit_time,
+                    visitor.sr_no, visitor.intake_office, visitor.visit_date, visitor.visit_time,
                     visitor.candidate_name, visitor.village, visitor.mobile,
                     visitor.purpose, visitor.remarks, visitor.created_at, visitor.updated_at,
                     visitor.sync_status, visitor.last_synced_at, visitor.is_deleted
                 )
             )
             visitor.id = cursor.lastrowid
-            logger.info("Saved visitor Sr No. %d (ID %d) to Visiting Register", visitor.sr_no, visitor.id)
+            logger.info("Saved visitor Sr No. %d (ID %d, Office: %s) to Visiting Register", visitor.sr_no, visitor.id, visitor.intake_office)
             return visitor.id
 
     def update_visitor(self, visitor: VisitorRecord) -> bool:
@@ -1787,17 +1789,19 @@ class CandidateRepository:
         now_iso = datetime.now().isoformat()
         visitor.updated_at = now_iso
         visitor.sync_status = SYNC_STATUS_PENDING
+        if not getattr(visitor, "intake_office", None):
+            visitor.intake_office = "Pernem"
         with self.db.transaction() as conn:
             conn.execute(
                 """
                 UPDATE visiting_register SET
-                    visit_date = ?, visit_time = ?, candidate_name = ?,
+                    intake_office = ?, visit_date = ?, visit_time = ?, candidate_name = ?,
                     village = ?, mobile = ?, purpose = ?, remarks = ?, updated_at = ?,
                     sync_status = ?
                 WHERE id = ?
                 """,
                 (
-                    visitor.visit_date, visitor.visit_time, visitor.candidate_name,
+                    visitor.intake_office, visitor.visit_date, visitor.visit_time, visitor.candidate_name,
                     visitor.village, visitor.mobile, visitor.purpose, visitor.remarks,
                     visitor.updated_at, visitor.sync_status, visitor.id
                 )
@@ -1841,8 +1845,8 @@ class CandidateRepository:
                 return VisitorRecord.from_row(row)
         return None
 
-    def search_visitors(self, query: str = "", date_filter: str = "", village_filter: str = "") -> List[VisitorRecord]:
-        """Filters visitors by search terms, date, or village."""
+    def search_visitors(self, query: str = "", date_filter: str = "", village_filter: str = "", office_filter: str = "") -> List[VisitorRecord]:
+        """Filters visitors by search terms, date, village, or intake office."""
         sql = "SELECT * FROM visiting_register WHERE is_deleted = 0"
         params = []
 
@@ -1858,6 +1862,10 @@ class CandidateRepository:
         if village_filter:
             sql += " AND village = ?"
             params.append(village_filter.strip())
+
+        if office_filter:
+            sql += " AND intake_office = ?"
+            params.append(office_filter.strip())
 
         sql += " ORDER BY sr_no DESC, id DESC"
 
@@ -1942,6 +1950,8 @@ class CandidateRepository:
 
                 visit_date = str(item.get("visit_date") or datetime.now().strftime("%Y-%m-%d")).strip()
                 visit_time = str(item.get("visit_time") or datetime.now().strftime("%I:%M %p")).strip()
+                raw_office = str(item.get("intake_office") or item.get("office") or "Pernem").strip()
+                intake_office = "Korgao" if "korgao" in raw_office.lower() else "Pernem"
                 village = str(item.get("village") or "").strip()
                 mobile = clean_mobile(str(item.get("mobile") or "")) if item.get("mobile") else ""
                 purpose = str(item.get("purpose") or "General Inquiry").strip()
@@ -1950,13 +1960,13 @@ class CandidateRepository:
                 conn.execute(
                     """
                     INSERT INTO visiting_register (
-                        sr_no, visit_date, visit_time, candidate_name, village,
+                        sr_no, intake_office, visit_date, visit_time, candidate_name, village,
                         mobile, purpose, remarks, created_at, updated_at, sync_status,
                         last_synced_at, is_deleted
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        sr_no, visit_date, visit_time, name, village, mobile,
+                        sr_no, intake_office, visit_date, visit_time, name, village, mobile,
                         purpose, remarks, now_iso, now_iso, SYNC_STATUS_PENDING, None, 0
                     )
                 )

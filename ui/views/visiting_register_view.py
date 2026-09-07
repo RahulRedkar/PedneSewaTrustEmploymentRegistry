@@ -181,12 +181,21 @@ class VisitingRegisterView(QWidget):
         self.purpose_combo.addItems(VISIT_PURPOSES)
         self.purpose_combo.currentTextChanged.connect(self.apply_filters)
 
+        # Office Filter
+        self.office_combo = QComboBox(filter_card)
+        self.office_combo.addItem("All Offices", "")
+        self.office_combo.addItem("Pedne (Pernem)", "Pernem")
+        self.office_combo.addItem("Korgao", "Korgao")
+        self.office_combo.currentIndexChanged.connect(lambda _: self.apply_filters())
+
         # Reset Filters button
         btn_reset = QPushButton("Clear Filters", filter_card)
         btn_reset.setProperty("class", "SecondaryButton")
         btn_reset.setIcon(AppIcons.clear())
         btn_reset.clicked.connect(self.reset_filters)
 
+        filter_row.addWidget(QLabel("Office:", filter_card))
+        filter_row.addWidget(self.office_combo)
         filter_row.addWidget(QLabel("Date:", filter_card))
         filter_row.addWidget(self.date_preset_combo)
         filter_row.addWidget(self.custom_date_edit)
@@ -202,9 +211,10 @@ class VisitingRegisterView(QWidget):
 
         # 4. Data Table
         self.table = QTableWidget(self)
-        self.table.setColumnCount(10)
+        self.table.setColumnCount(11)
         self.table.setHorizontalHeaderLabels([
             "Sr No.",
+            "Office",
             "Date",
             "Time",
             "Name of Candidate",
@@ -218,15 +228,16 @@ class VisitingRegisterView(QWidget):
 
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(0, QHeaderView.ResizeToContents)  # Sr No
-        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # Date
-        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Time
-        header.setSectionResizeMode(3, QHeaderView.Stretch)           # Name
-        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Village
-        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Mobile
-        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)  # Purpose
-        header.setSectionResizeMode(7, QHeaderView.Stretch)           # Remarks
-        header.setSectionResizeMode(8, QHeaderView.ResizeToContents)  # Cloud Backup
-        header.setSectionResizeMode(9, QHeaderView.ResizeToContents)  # Actions
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)  # Office
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)  # Date
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)  # Time
+        header.setSectionResizeMode(4, QHeaderView.Stretch)           # Name
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Village
+        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)  # Mobile
+        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)  # Purpose
+        header.setSectionResizeMode(8, QHeaderView.Stretch)           # Remarks
+        header.setSectionResizeMode(9, QHeaderView.ResizeToContents)  # Cloud Backup
+        header.setSectionResizeMode(10, QHeaderView.ResizeToContents) # Actions
 
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
@@ -289,8 +300,9 @@ class VisitingRegisterView(QWidget):
         self.apply_filters()
 
     def apply_filters(self):
-        """Applies search text, date, village, and purpose filters."""
+        """Applies search text, date, village, purpose, and intake office filters."""
         query = self.search_input.text().strip().lower()
+        office_filter = self.office_combo.currentData()
         village_filter = self.village_combo.currentText()
         purpose_filter = self.purpose_combo.currentText()
         date_preset = self.date_preset_combo.currentText()
@@ -310,20 +322,25 @@ class VisitingRegisterView(QWidget):
                     query in v.village.lower() or
                     query in v.purpose.lower() or
                     query in (v.remarks or "").lower() or
+                    query in getattr(v, "intake_office", "").lower() or
                     query in str(v.sr_no)
                 )
                 if not match_query:
                     continue
 
-            # 2. Village filter
+            # 2. Office filter
+            if office_filter and getattr(v, "intake_office", "Pernem") != office_filter:
+                continue
+
+            # 3. Village filter
             if village_filter != "All Villages" and v.village != village_filter:
                 continue
 
-            # 3. Purpose filter
+            # 4. Purpose filter
             if purpose_filter != "All Purposes" and v.purpose != purpose_filter:
                 continue
 
-            # 4. Date filter
+            # 5. Date filter
             if date_preset == "Today" and v.visit_date != today_str:
                 continue
             elif date_preset == "Yesterday" and v.visit_date != yesterday_str:
@@ -342,6 +359,7 @@ class VisitingRegisterView(QWidget):
     def reset_filters(self):
         """Resets all filter inputs to default."""
         self.search_input.clear()
+        self.office_combo.setCurrentIndex(0)
         self.date_preset_combo.setCurrentIndex(0)
         self.village_combo.setCurrentIndex(0)
         self.purpose_combo.setCurrentIndex(0)
@@ -356,44 +374,50 @@ class VisitingRegisterView(QWidget):
             sr_item.setTextAlignment(Qt.AlignCenter)
             self.table.setItem(row_idx, 0, sr_item)
 
-            # 1: Date
+            # 1: Office
+            off_str = "Korgao" if getattr(v, "intake_office", "Pernem") == "Korgao" else "Pedne"
+            off_item = QTableWidgetItem(off_str)
+            off_item.setTextAlignment(Qt.AlignCenter)
+            self.table.setItem(row_idx, 1, off_item)
+
+            # 2: Date
             date_item = QTableWidgetItem(v.visit_date)
             date_item.setTextAlignment(Qt.AlignCenter)
-            self.table.setItem(row_idx, 1, date_item)
+            self.table.setItem(row_idx, 2, date_item)
 
-            # 2: Time
+            # 3: Time
             time_item = QTableWidgetItem(v.visit_time)
             time_item.setTextAlignment(Qt.AlignCenter)
-            self.table.setItem(row_idx, 2, time_item)
+            self.table.setItem(row_idx, 3, time_item)
 
-            # 3: Candidate Name
+            # 4: Candidate Name
             name_item = QTableWidgetItem(v.candidate_name)
-            self.table.setItem(row_idx, 3, name_item)
+            self.table.setItem(row_idx, 4, name_item)
 
-            # 4: Village
+            # 5: Village
             village_item = QTableWidgetItem(v.village or "—")
-            self.table.setItem(row_idx, 4, village_item)
+            self.table.setItem(row_idx, 5, village_item)
 
-            # 5: Mobile No.
+            # 6: Mobile No.
             mob_item = QTableWidgetItem(v.mobile or "—")
             mob_item.setTextAlignment(Qt.AlignCenter)
-            self.table.setItem(row_idx, 5, mob_item)
+            self.table.setItem(row_idx, 6, mob_item)
 
-            # 6: Purpose
+            # 7: Purpose
             purpose_item = QTableWidgetItem(v.purpose or "—")
-            self.table.setItem(row_idx, 6, purpose_item)
+            self.table.setItem(row_idx, 7, purpose_item)
 
-            # 7: Remarks
+            # 8: Remarks
             remarks_item = QTableWidgetItem(v.remarks or "—")
-            self.table.setItem(row_idx, 7, remarks_item)
+            self.table.setItem(row_idx, 8, remarks_item)
 
-            # 8: Cloud Backup Status Badge
+            # 9: Cloud Backup Status Badge
             badge_item = self._create_cloud_badge_item(v)
-            self.table.setItem(row_idx, 8, badge_item)
+            self.table.setItem(row_idx, 9, badge_item)
 
-            # 9: Action Buttons (Edit, Delete)
+            # 10: Action Buttons (Edit, Delete)
             actions_widget = self._create_actions_widget(v)
-            self.table.setCellWidget(row_idx, 9, actions_widget)
+            self.table.setCellWidget(row_idx, 10, actions_widget)
 
     def _create_cloud_badge_item(self, v: VisitorRecord) -> QTableWidgetItem:
         item = QTableWidgetItem()

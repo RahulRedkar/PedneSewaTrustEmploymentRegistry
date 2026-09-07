@@ -17,6 +17,7 @@ from utils.validators import clean_mobile
 
 HEADER_SYNONYMS = {
     "sr_no": ["sr no", "sr. no.", "sr no.", "serial no", "serial number", "s.no", "s no", "sno", "id"],
+    "intake_office": ["intake office", "intake_office", "office", "branch", "centre", "center", "location office", "pedne / korgao", "office name"],
     "visit_date": ["date", "visit date", "date of visit", "visiting date", "entry date"],
     "visit_time": ["time", "visit time", "time of visit", "in time", "visiting time"],
     "candidate_name": ["name of candidate", "candidate name", "name", "visitor name", "full name", "candidate"],
@@ -167,6 +168,9 @@ class FileImporter:
                         item[key] = _format_cell_time(val)
                     elif key == "mobile":
                         item[key] = clean_mobile(str(val or ""))
+                    elif key == "intake_office":
+                        raw_off = str(val or "").strip()
+                        item[key] = "Korgao" if "korgao" in raw_off.lower() else "Pernem"
                     else:
                         item[key] = str(val or "").strip()
 
@@ -229,6 +233,9 @@ class FileImporter:
                         item[key] = _format_cell_time(val)
                     elif key == "mobile":
                         item[key] = clean_mobile(str(val or ""))
+                    elif key == "intake_office":
+                        raw_off = str(val or "").strip()
+                        item[key] = "Korgao" if "korgao" in raw_off.lower() else "Pernem"
                     else:
                         item[key] = str(val or "").strip()
 

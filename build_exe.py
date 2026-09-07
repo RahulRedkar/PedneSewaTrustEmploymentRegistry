@@ -79,6 +79,13 @@ def build_executable():
             if src.exists():
                 shutil.copy2(src, dist_assets / item)
                 print(f"Copied {item} to {dist_assets / item}")
+
+        for bat_file in ["Candidate.bat", "Update_To_Latest.bat"]:
+            src_bat = root_dir / bat_file
+            if src_bat.exists():
+                shutil.copy2(src_bat, dist_dir / bat_file)
+                print(f"Copied {bat_file} to {dist_dir / bat_file}")
+
         print(f"Standalone executable located at:\n{exe_path}")
     else:
         print(f"\n[ERROR] Build failed with exit code {res.returncode}")

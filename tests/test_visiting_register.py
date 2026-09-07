@@ -50,7 +50,8 @@ def test_visitor_model_methods():
 
     row = vis.to_row_list()
     assert row[0] == "1"
-    assert row[3] == "Rahul Redkar"
+    assert row[1] == "Pernem"
+    assert row[4] == "Rahul Redkar"
 
 
 def test_sequential_visitor_sr_no(repo):
@@ -146,7 +147,8 @@ def test_csv_export_visitors(repo):
         reader = list(csv.reader(f))
         assert len(reader) >= 2  # header + 1 row
         assert reader[0] == VISITING_REGISTER_COLUMNS
-        assert reader[1][3] == "Anita Deshmukh"
+        assert reader[1][1] == "Pernem"
+        assert reader[1][4] == "Anita Deshmukh"
 
 
 def test_excel_and_csv_import():
@@ -310,5 +312,120 @@ def test_manual_full_backup_when_zero_pending():
         _, kwargs = mock_client.push_backup.call_args
         assert len(kwargs["candidates"]) == 1
         assert len(kwargs["visitors"]) == 1
+
+
+def test_visitor_intake_office(repo):
+    """Tests intake office assignment, retrieval, and search filtering."""
+    v_pernem = VisitorRecord(
+        candidate_name="Pernem Visitor",
+        village="Pernem",
+        mobile="9822110001",
+        purpose="Registration",
+        intake_office="Pernem"
+    )
+    v_korgao = VisitorRecord(
+        candidate_name="Korgao Visitor",
+        village="Corgao",
+        mobile="9822110002",
+        purpose="Inquiry",
+        intake_office="Korgao"
+    )
+
+    id_p = repo.save_visitor(v_pernem)
+    id_k = repo.save_visitor(v_korgao)
+
+    loaded_p = repo.get_visitor_by_id(id_p)
+    assert loaded_p.intake_office == "Pernem"
+
+    loaded_k = repo.get_visitor_by_id(id_k)
+    assert loaded_k.intake_office == "Korgao"
+
+    # Search with office filter
+    korgao_res = repo.search_visitors(office_filter="Korgao")
+    assert len(korgao_res) == 1
+    assert korgao_res[0].candidate_name == "Korgao Visitor"
+
+    pernem_res = repo.search_visitors(office_filter="Pernem")
+    assert len(pernem_res) == 1
+    assert pernem_res[0].candidate_name == "Pernem Visitor"
+
+
+def test_visiting_register_migration_v7():
+    """Verifies Migration v7 safely adds intake_office column to older schemas."""
+    import sqlite3
+    from database.schema import MigrationManager
+
+    temp_dir = tempfile.mkdtemp()
+    db_path = os.path.join(temp_dir, "test_migration_v7.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+
+    # Create v6 schema (with remarks, without intake_office)
+    cursor.execute("""
+        CREATE TABLE visiting_register (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sr_no INTEGER NOT NULL UNIQUE,
+            visit_date TEXT NOT NULL,
+            visit_time TEXT NOT NULL,
+            candidate_name TEXT NOT NULL,
+            village TEXT NOT NULL,
+            mobile TEXT NOT NULL,
+            purpose TEXT NOT NULL,
+            remarks TEXT DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            sync_status TEXT NOT NULL DEFAULT 'PENDING',
+            last_synced_at TEXT,
+            is_deleted INTEGER NOT NULL DEFAULT 0
+        );
+    """)
+    cursor.execute("CREATE TABLE schema_version (version INTEGER PRIMARY KEY, applied_at TEXT, description TEXT);")
+    cursor.execute("INSERT INTO schema_version VALUES (6, '2026-09-07', 'v6');")
+    cursor.execute("""
+        INSERT INTO visiting_register (sr_no, visit_date, visit_time, candidate_name, village, mobile, purpose, remarks, created_at, updated_at)
+        VALUES (1, '2026-09-07', '10:00 AM', 'Pre-migration Vis', 'Arambol', '9822119955', 'Inquiry', '', '2026-09-07', '2026-09-07');
+    """)
+    conn.commit()
+
+    # Apply migrations up to v7
+    MigrationManager.apply_migrations(conn)
+
+    assert MigrationManager.get_current_version(conn) == 7
+
+    cursor.execute("PRAGMA table_info(visiting_register);")
+    cols = [c[1] for c in cursor.fetchall()]
+    assert "intake_office" in cols
+
+    # Verify existing record has default 'Pernem'
+    cursor.execute("SELECT intake_office FROM visiting_register WHERE sr_no = 1;")
+    row = cursor.fetchone()
+    assert row[0] == "Pernem"
+    conn.close()
+
+
+def test_import_with_intake_office(repo):
+    """Tests CSV import with Intake Office column."""
+    temp_dir = tempfile.mkdtemp()
+    csv_path = os.path.join(temp_dir, "visiting_with_office.csv")
+
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["Sr No.", "Intake Office", "Date", "Time", "Name of Candidate", "Address (Village)", "Mobile No.", "Purpose of Visit", "Remarks"])
+        writer.writerow(["", "Korgao", "2026-09-07", "11:00 AM", "Korgao Walkin", "Corgao", "9822000088", "Job Search", "Referred by friend"])
+        writer.writerow(["", "Pernem", "2026-09-07", "11:30 AM", "Pernem Walkin", "Mandrem", "9822000089", "Inquiry", ""])
+
+    importer = FileImporter(repo=repo)
+    res = importer.import_visiting_register(csv_path)
+    assert res["success"] is True
+    assert res["inserted"] == 2
+
+    k_vis = repo.search_visitors(query="Korgao Walkin")
+    assert len(k_vis) == 1
+    assert k_vis[0].intake_office == "Korgao"
+
+    p_vis = repo.search_visitors(query="Pernem Walkin")
+    assert len(p_vis) == 1
+    assert p_vis[0].intake_office == "Pernem"
+
 
 

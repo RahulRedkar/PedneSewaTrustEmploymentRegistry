@@ -15,7 +15,8 @@ from PySide6.QtCore import Qt, QDate, QTime, QStringListModel
 
 from models.visitor import VisitorRecord
 from database.repository import repository
-from app.constants import PERNEM_VILLAGES, VISIT_PURPOSES
+from app.config import config
+from app.constants import PERNEM_VILLAGES, VISIT_PURPOSES, OFFICE_PERNEM, OFFICE_KORGAO
 from ui.components.icons import AppIcons
 from utils.validators import clean_mobile
 from utils.logger import logger
@@ -102,7 +103,17 @@ class LogVisitDialog(QDialog):
         self.time_edit.setTime(QTime.currentTime())
         form_layout.addRow("Visit Time *:", self.time_edit)
 
-        # 4. Name of Candidate
+        # 4. Intake Office
+        self.combo_intake_office = QComboBox(self)
+        self.combo_intake_office.addItem("Pedne (Pernem)", OFFICE_PERNEM)
+        self.combo_intake_office.addItem("Korgao", OFFICE_KORGAO)
+        def_off = config.get("default_office", OFFICE_PERNEM)
+        idx = self.combo_intake_office.findData(def_off)
+        if idx >= 0:
+            self.combo_intake_office.setCurrentIndex(idx)
+        form_layout.addRow("Intake Office *:", self.combo_intake_office)
+
+        # 5. Name of Candidate
         self.name_edit = QLineEdit(self)
         self.name_edit.setPlaceholderText("Full Name of candidate / visitor")
         self.name_edit.setClearButtonEnabled(True)
@@ -243,6 +254,11 @@ class LogVisitDialog(QDialog):
             else:
                 self.purpose_combo.setCurrentText(v.purpose)
 
+        if getattr(v, "intake_office", None):
+            off_idx = self.combo_intake_office.findData(v.intake_office)
+            if off_idx >= 0:
+                self.combo_intake_office.setCurrentIndex(off_idx)
+
         self.remarks_edit.setText(v.remarks or "")
         self._on_purpose_changed(self.purpose_combo.currentText())
 
@@ -304,6 +320,7 @@ class LogVisitDialog(QDialog):
             self.remarks_edit.setFocus()
             return
 
+        intake_office = self.combo_intake_office.currentData() or OFFICE_PERNEM
         visit_date = self.date_edit.date().toString("yyyy-MM-dd")
         visit_time = self.time_edit.time().toString("hh:mm AP")
         village = self.village_combo.currentText().strip()
@@ -314,6 +331,7 @@ class LogVisitDialog(QDialog):
             sr_no = repository.get_next_visitor_sr_no()
 
         if self.is_edit and self.visitor:
+            self.visitor.intake_office = intake_office
             self.visitor.visit_date = visit_date
             self.visitor.visit_time = visit_time
             self.visitor.candidate_name = name
@@ -327,6 +345,7 @@ class LogVisitDialog(QDialog):
         else:
             new_record = VisitorRecord(
                 sr_no=sr_no,
+                intake_office=intake_office,
                 visit_date=visit_date,
                 visit_time=visit_time,
                 candidate_name=name,

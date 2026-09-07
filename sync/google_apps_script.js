@@ -75,9 +75,10 @@ var CANONICAL_COLUMNS = [
   { key: "updated_at", header: "Updated At" }
 ];
 
-// 10 Canonical Visiting Register Column Definitions
+// 11 Canonical Visiting Register Column Definitions
 var VISITING_CANONICAL_COLUMNS = [
   { key: "sr_no", header: "Sr No." },
+  { key: "intake_office", header: "Intake Office" },
   { key: "visit_date", header: "Date" },
   { key: "visit_time", header: "Time" },
   { key: "candidate_name", header: "Name of Candidate" },
@@ -139,7 +140,7 @@ function doPost(e) {
     var candidates = payload.candidates || [];
     var candResult = { inserted: 0, updated: 0, totalInSheet: 0 };
     if (candidates.length > 0) {
-      var candSheet = ss.getSheetByName("Candidates");
+      var candSheet = findSheetByNameFuzzy(ss, "Candidates");
       if (!candSheet) {
         candSheet = ss.insertSheet("Candidates");
       }
@@ -150,7 +151,7 @@ function doPost(e) {
     var visitors = payload.visitors || [];
     var visitorResult = { inserted: 0, updated: 0, totalInSheet: 0 };
     if (visitors.length > 0) {
-      var visitorSheet = ss.getSheetByName("Visiting Register");
+      var visitorSheet = findSheetByNameFuzzy(ss, "Visiting Register");
       if (!visitorSheet) {
         visitorSheet = ss.insertSheet("Visiting Register");
       }
@@ -457,12 +458,23 @@ function upsertVisitors(sheet, visitors) {
 
   var activeHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
 
-  // Check if active headers need expansion for Remarks or newly added columns
-  if (activeHeaders.length < headerNames.length) {
-    var missingHeaders = headerNames.slice(activeHeaders.length);
+  // Dynamic header expansion: ensure all canonical headers exist in Row 1
+  var existingHeaderSet = {};
+  for (var h = 0; h < activeHeaders.length; h++) {
+    var rawH = String(activeHeaders[h] || "").trim().toLowerCase();
+    existingHeaderSet[rawH] = true;
+  }
+  var missingHeaders = [];
+  for (var i = 0; i < headerNames.length; i++) {
+    var hName = headerNames[i];
+    if (!existingHeaderSet[hName.toLowerCase()]) {
+      missingHeaders.push(hName);
+    }
+  }
+  if (missingHeaders.length > 0) {
     sheet.getRange(1, activeHeaders.length + 1, 1, missingHeaders.length).setValues([missingHeaders]);
-    formatHeaderRow(sheet, headerNames.length);
-    activeHeaders = headerNames;
+    formatHeaderRow(sheet, activeHeaders.length + missingHeaders.length);
+    activeHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     lastCol = activeHeaders.length;
   }
 
@@ -514,6 +526,28 @@ function upsertVisitors(sheet, visitors) {
 }
 
 /**
+ * Case-insensitive, whitespace-trimmed fuzzy sheet finder.
+ * Ensures tabs like "Visiting Register", "visiting register", or "Visiting Register " match reliably.
+ */
+function findSheetByNameFuzzy(ss, targetName) {
+  var direct = ss.getSheetByName(targetName);
+  if (direct) return direct;
+  var sheets = ss.getSheets();
+  var cleanTarget = targetName.toLowerCase().replace(/[\s_-]+/g, "");
+  for (var i = 0; i < sheets.length; i++) {
+    var name = sheets[i].getName();
+    var cleanName = name.toLowerCase().replace(/[\s_-]+/g, "");
+    if (cleanName === cleanTarget || (cleanTarget.indexOf("visit") !== -1 && cleanName.indexOf("visit") !== -1)) {
+      return sheets[i];
+    }
+    if (cleanTarget.indexOf("cand") !== -1 && cleanName.indexOf("cand") !== -1) {
+      return sheets[i];
+    }
+  }
+  return null;
+}
+
+/**
  * Diagnostic HTTP GET endpoint for operational health check.
  */
 function doGet(e) {
@@ -522,7 +556,9 @@ function doGet(e) {
     status: "SUCCESS",
     service: "Pedne Sewa Trust Cloud Backup Gateway",
     api_key_configured: hasApiKey,
-    version: "2.1.0",
+    version: "2.2.0",
+    visiting_register_supported: true,
+    intake_office_supported: true,
     timestamp: new Date().toISOString()
   }, 200);
 }
