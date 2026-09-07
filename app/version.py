@@ -4,7 +4,7 @@ Single source of truth used across UI, constants, PyInstaller, build scripts,
 and GitHub Releases auto-updater.
 """
 
-APP_VERSION = "2.0.8"
+APP_VERSION = "2.0.9"
 APP_NAME = "Pedne Sewa Trust — Employment & Candidate Registry"
 APP_ORGANISATION = "Pedne Sewa Trust"
 

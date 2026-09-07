@@ -617,10 +617,10 @@ def test_updater_falls_back_to_github_when_gas_unconfigured(qapp):
     mock_resp = MagicMock()
     mock_resp.status = 200
     mock_resp.read.return_value = json.dumps({
-        "tag_name": "v2.0.9",
+        "tag_name": "v3.0.0",
         "body": "GitHub Fallback Release",
         "assets": [
-            {"name": "PedneSewaTrustRegistry-v2.0.9-Windows.zip", "browser_download_url": "https://github.com/dl.zip"}
+            {"name": "PedneSewaTrustRegistry-v3.0.0-Windows.zip", "browser_download_url": "https://github.com/dl.zip"}
         ]
     }).encode("utf-8")
     mock_resp.__enter__.return_value = mock_resp
@@ -633,7 +633,7 @@ def test_updater_falls_back_to_github_when_gas_unconfigured(qapp):
         thread.run()
 
     assert len(emitted_updates) == 1
-    assert emitted_updates[0][0] == "v2.0.9"
+    assert emitted_updates[0][0] == "v3.0.0"
     assert "github.com" in emitted_updates[0][2]
 
 
