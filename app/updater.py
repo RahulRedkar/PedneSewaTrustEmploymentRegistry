@@ -483,7 +483,13 @@ class UpdateDialog(QDialog):
         # Detached batch script that waits for current process PID to quit,
         # replaces files in app_dir, launches updated EXE, and deletes itself.
         if is_directory:
-            copy_cmd = f'xcopy /E /Y /I /Q /H /R "{staged_path}\\*" "{app_dir}\\" >nul 2>&1'
+            copy_cmd = (
+                f'if exist "{app_dir}\\_internal" rmdir /S /Q "{app_dir}\\_internal" >nul 2>&1\n'
+                f'robocopy "{staged_path}" "{app_dir}" /E /R:10 /W:1 /XF config.json *.db *.sqlite *.sqlite3 *.log *.pdf *.xlsx *.csv >nul 2>&1\n'
+                f'if %ERRORLEVEL% GEQ 8 (\n'
+                f'    xcopy /E /Y /I /Q /H /R "{staged_path}\\*" "{app_dir}\\" >nul 2>&1\n'
+                f')'
+            )
         else:
             copy_cmd = f'copy /Y "{staged_path}" "{app_dir}\\PedneSewaTrustRegistry.exe" >nul 2>&1'
 
@@ -496,6 +502,7 @@ if "%ERRORLEVEL%"=="0" (
     timeout /t 1 /nobreak >nul
     goto waitloop
 )
+timeout /t 2 /nobreak >nul
 
 echo Updating application files in "{app_dir}"...
 {copy_cmd}
