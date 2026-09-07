@@ -14,6 +14,7 @@ from app.constants import (
     DEFAULT_WORKSHEET_NAME,
     DEFAULT_SYNC_INTERVAL_MINUTES,
     DEFAULT_APPS_SCRIPT_URL,
+    DEFAULT_BACKUP_API_KEY,
     OFFICE_PERNEM
 )
 from app.version import GITHUB_REPO_SLUG
@@ -56,7 +57,7 @@ class AppConfig:
             "worksheet_name": DEFAULT_WORKSHEET_NAME,
             "sync_interval_minutes": DEFAULT_SYNC_INTERVAL_MINUTES,
             "apps_script_url": DEFAULT_APPS_SCRIPT_URL,
-            "backup_api_key": "",
+            "backup_api_key": DEFAULT_BACKUP_API_KEY,
             "github_update_token": "",
             "github_repo": GITHUB_REPO_SLUG,
             "database_path": str(self.default_db_path),

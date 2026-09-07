@@ -551,3 +551,106 @@ def test_updater_batch_script_syntax_and_process_management(qapp, tmp_path):
     assert kwargs.get("stderr") == subprocess.DEVNULL
     assert kwargs.get("close_fds") is True
 
+
+# ==============================================================================
+# 5. Google Apps Script & Google Drive Transition Tests
+# ==============================================================================
+
+def test_google_apps_script_update_check():
+    """Verifies that AppsScriptClient.check_update sends action=check_update and returns payload."""
+    from sync.apps_script_client import AppsScriptClient
+    client = AppsScriptClient()
+
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.json.return_value = {
+        "status": "SUCCESS",
+        "latest_version": "2.0.9",
+        "release_notes": "Google Drive Release",
+        "download_url": "https://drive.google.com/uc?export=download&id=FILE123",
+        "asset_name": "PedneSewaTrustRegistry-v2.0.9-Windows.zip"
+    }
+
+    with patch("requests.post", return_value=mock_resp) as mock_post:
+        data = client.check_update(current_version="2.0.8")
+
+    assert data is not None
+    assert data["latest_version"] == "2.0.9"
+    assert "drive.google.com" in data["download_url"]
+    assert mock_post.called
+    sent_json = mock_post.call_args[1]["json"]
+    assert sent_json["action"] == "check_update"
+    assert sent_json["current_version"] == "2.0.8"
+
+
+def test_updater_prefers_google_apps_script(qapp):
+    """Verifies that UpdateCheckThread checks Google Apps Script first and yields Google Drive release."""
+    thread = UpdateCheckThread(check_google_first=True)
+
+    gas_mock_data = {
+        "status": "SUCCESS",
+        "latest_version": "2.1.0",
+        "release_notes": "Private Google Drive Update",
+        "download_url": "https://drive.google.com/uc?export=download&id=TESTID",
+        "asset_name": "PedneSewaTrustRegistry-v2.1.0-Windows.zip",
+        "checksum_url": ""
+    }
+
+    emitted_updates = []
+    thread.update_available.connect(lambda *args: emitted_updates.append(args))
+
+    with patch("sync.apps_script_client.apps_script_client.check_update", return_value=gas_mock_data), \
+         patch("urllib.request.urlopen") as mock_github:
+        thread.run()
+
+    assert len(emitted_updates) == 1
+    assert emitted_updates[0][0] == "2.1.0"
+    assert "drive.google.com" in emitted_updates[0][2]
+    # GitHub must NOT be called because Google Apps Script had the update
+    assert not mock_github.called
+
+
+def test_updater_falls_back_to_github_when_gas_unconfigured(qapp):
+    """Verifies that UpdateCheckThread falls back to GitHub when Google Apps Script returns None."""
+    thread = UpdateCheckThread(repo_slug="RahulRedkar/PedneSewaTrustEmploymentRegistry", is_manual=True, check_google_first=True)
+
+    mock_resp = MagicMock()
+    mock_resp.status = 200
+    mock_resp.read.return_value = json.dumps({
+        "tag_name": "v2.0.9",
+        "body": "GitHub Fallback Release",
+        "assets": [
+            {"name": "PedneSewaTrustRegistry-v2.0.9-Windows.zip", "browser_download_url": "https://github.com/dl.zip"}
+        ]
+    }).encode("utf-8")
+    mock_resp.__enter__.return_value = mock_resp
+
+    emitted_updates = []
+    thread.update_available.connect(lambda *args: emitted_updates.append(args))
+
+    with patch("sync.apps_script_client.apps_script_client.check_update", return_value=None), \
+         patch("urllib.request.urlopen", return_value=mock_resp):
+        thread.run()
+
+    assert len(emitted_updates) == 1
+    assert emitted_updates[0][0] == "v2.0.9"
+    assert "github.com" in emitted_updates[0][2]
+
+
+def test_pre_update_cloud_backup_worker():
+    """Verifies that PreUpdateBackupWorker performs a manual full cloud sync."""
+    from app.updater import PreUpdateBackupWorker
+
+    worker = PreUpdateBackupWorker()
+    emitted = []
+    worker.backup_finished.connect(lambda success, msg: emitted.append((success, msg)))
+
+    with patch("sync.sync_engine.sync_engine.run_sync", return_value={"status": "SUCCESS"}) as mock_sync:
+        worker.run()
+
+    assert mock_sync.called
+    assert mock_sync.call_args[1].get("is_manual") is True
+    assert len(emitted) == 1
+    assert emitted[0][0] is True
+
+

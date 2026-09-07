@@ -112,6 +112,11 @@ function doPost(e) {
     var authResult = validateApiKey(payload.api_key);
     if (!authResult.valid) return createJsonResponse({ status: "ERROR", message: authResult.error }, 401);
 
+    // 0. Process Action: Check for Application Updates
+    if (payload.action === "check_update") {
+      return handleCheckUpdate(payload);
+    }
+
     var targetSpreadsheetId = (payload.spreadsheet_id || "").trim() ||
       PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID") ||
       "1DC9TY2D2_mJgyJJ_hM3a91UsSOuqssWiBuMKhaxoW_0";
@@ -548,6 +553,85 @@ function findSheetByNameFuzzy(ss, targetName) {
 }
 
 /**
+ * Serves private application update checks from Google Drive.
+ * Uses Script Properties:
+ *   - LATEST_VERSION (e.g. "2.0.8")
+ *   - RELEASE_NOTES (e.g. "Release notes...")
+ *   - UPDATE_DOWNLOAD_URL (direct link or Drive link)
+ *   - UPDATE_DRIVE_FILE_ID (Google Drive file ID)
+ *   - UPDATE_FOLDER_ID (Google Drive folder ID)
+ */
+function handleCheckUpdate(payload) {
+  var props = PropertiesService.getScriptProperties();
+  var latestVer = props.getProperty("LATEST_VERSION");
+  var releaseNotes = props.getProperty("RELEASE_NOTES") || "Performance optimizations and stability improvements.";
+  var updateUrl = props.getProperty("UPDATE_DOWNLOAD_URL");
+  var fileId = props.getProperty("UPDATE_DRIVE_FILE_ID");
+  var folderId = props.getProperty("UPDATE_FOLDER_ID");
+  var fileSize = 0;
+  var assetName = "";
+
+  // 1. If UPDATE_FOLDER_ID is set, search Drive folder for the newest release zip
+  if (folderId) {
+    try {
+      var folder = DriveApp.getFolderById(folderId);
+      var files = folder.getFiles();
+      var newestFile = null;
+      while (files.hasNext()) {
+        var f = files.next();
+        var fname = f.getName().toLowerCase();
+        if (fname.indexOf(".zip") !== -1) {
+          if (!newestFile || f.getLastUpdated() > newestFile.getLastUpdated()) {
+            newestFile = f;
+          }
+        }
+      }
+      if (newestFile) {
+        fileId = newestFile.getId();
+        assetName = newestFile.getName();
+        fileSize = newestFile.getSize();
+        var verMatch = assetName.match(/v?(\d+\.\d+\.\d+)/i);
+        if (verMatch && !latestVer) {
+          latestVer = verMatch[1];
+        }
+      }
+    } catch (driveErr) {
+      // Continue to direct properties
+    }
+  }
+
+  // 2. If fileId is available, build direct Google Drive download URL
+  if (fileId && !updateUrl) {
+    updateUrl = "https://drive.google.com/uc?export=download&id=" + fileId;
+  }
+
+  // 3. If neither version nor update URL is set, return NOT_CONFIGURED
+  if (!latestVer && !updateUrl) {
+    return createJsonResponse({
+      status: "NOT_CONFIGURED",
+      service: "Pedne Sewa Trust Cloud Update Gateway",
+      message: "No Google Drive update has been configured in Script Properties yet."
+    }, 200);
+  }
+
+  if (!assetName) {
+    assetName = "PedneSewaTrustRegistry-v" + (latestVer || "2.0.8") + "-Windows.zip";
+  }
+
+  return createJsonResponse({
+    status: "SUCCESS",
+    service: "Pedne Sewa Trust Cloud Update Gateway",
+    latest_version: latestVer || "2.0.8",
+    release_notes: releaseNotes,
+    download_url: updateUrl || "",
+    asset_name: assetName,
+    file_size: fileSize,
+    source: "google_drive",
+    timestamp: new Date().toISOString()
+  }, 200);
+}
+
+/**
  * Diagnostic HTTP GET endpoint for operational health check.
  */
 function doGet(e) {
@@ -556,9 +640,10 @@ function doGet(e) {
     status: "SUCCESS",
     service: "Pedne Sewa Trust Cloud Backup Gateway",
     api_key_configured: hasApiKey,
-    version: "2.2.0",
+    version: "2.3.0",
     visiting_register_supported: true,
     intake_office_supported: true,
+    google_drive_updates_supported: true,
     timestamp: new Date().toISOString()
   }, 200);
 }

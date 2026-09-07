@@ -8,7 +8,7 @@ import os
 from typing import List, Dict, Any, Optional
 import requests
 from app.config import config
-from app.constants import DEFAULT_SPREADSHEET_ID
+from app.constants import DEFAULT_SPREADSHEET_ID, DEFAULT_APPS_SCRIPT_URL, DEFAULT_BACKUP_API_KEY
 from models.candidate import Candidate
 from models.visitor import VisitorRecord
 from utils.logger import logger
@@ -22,12 +22,12 @@ class AppsScriptClient:
 
     def get_endpoint_url(self) -> str:
         """Returns the configured Google Apps Script Web App URL from env or config."""
-        url = os.environ.get("GOOGLE_APPS_SCRIPT_URL") or config.get("apps_script_url") or ""
+        url = os.environ.get("GOOGLE_APPS_SCRIPT_URL") or config.get("apps_script_url") or DEFAULT_APPS_SCRIPT_URL or ""
         return url.strip()
 
     def get_api_key(self) -> str:
         """Returns the configured backup API key from env or config without logging it."""
-        key = os.environ.get("BACKUP_API_KEY") or config.get("backup_api_key") or config.get("api_key") or ""
+        key = os.environ.get("BACKUP_API_KEY") or config.get("backup_api_key") or config.get("api_key") or DEFAULT_BACKUP_API_KEY or ""
         return key.strip()
 
     def is_configured(self) -> bool:
@@ -42,6 +42,33 @@ class AppsScriptClient:
         if "YOUR_DEPLOYMENT_ID" in url:
             return False
         return url.startswith("https://script.google.com/")
+
+    def check_update(self, current_version: str = "") -> Optional[Dict[str, Any]]:
+        """
+        Queries Google Apps Script for available application updates stored on Google Drive.
+        Returns dict with update metadata if configured and available, or None if unconfigured / offline.
+        """
+        if not self.is_configured():
+            return None
+        url = self.get_endpoint_url()
+        key = self.get_api_key()
+        if not url or not key:
+            return None
+
+        payload = {
+            "api_key": key,
+            "action": "check_update",
+            "current_version": current_version
+        }
+        try:
+            res = requests.post(url, json=payload, timeout=6.0)
+            if res.status_code == 200:
+                data = res.json()
+                if data.get("status") == "SUCCESS" and data.get("latest_version"):
+                    return data
+        except Exception as e:
+            logger.debug("Google Apps Script update check network notice: %s", e)
+        return None
 
     def push_candidates(self, candidates: List[Candidate]) -> Dict[str, Any]:
         """

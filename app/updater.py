@@ -141,12 +141,42 @@ class UpdateCheckThread(QThread):
     check_failed = Signal(str)                          # (error_message)
     check_finished = Signal(bool)                       # Legacy compatibility
 
-    def __init__(self, repo_slug: str = None, is_manual: bool = False, parent=None):
+    def __init__(self, repo_slug: str = None, is_manual: bool = False, check_google_first: bool = True, parent=None):
         super().__init__(parent)
         self.repo_slug = repo_slug or config.get("github_repo", DEFAULT_GITHUB_REPO)
         self.is_manual = is_manual
+        self.check_google_first = check_google_first
 
     def run(self):
+        # 1. First priority: Check private Google Apps Script / Google Drive update gateway
+        if self.check_google_first:
+            try:
+                from sync.apps_script_client import apps_script_client
+                gas_data = apps_script_client.check_update(APP_VERSION)
+                if gas_data and gas_data.get("latest_version"):
+                    tag_name = gas_data.get("latest_version", "")
+                    release_notes = gas_data.get("release_notes", "Performance optimizations and stability improvements.")
+                    download_url = gas_data.get("download_url", "")
+                    asset_name = gas_data.get("asset_name", f"PedneSewaTrustRegistry-v{tag_name}-Windows.zip")
+                    checksum_url = gas_data.get("checksum_url", "")
+
+                    current_ver = parse_version(APP_VERSION)
+                    latest_ver = parse_version(tag_name)
+
+                    if latest_ver > current_ver:
+                        logger.info("Newer release found via Google Drive: %s (Current: %s)", tag_name, APP_VERSION)
+                        self.update_available.emit(tag_name, release_notes, download_url, asset_name, checksum_url)
+                        self.check_finished.emit(True)
+                        return
+                    else:
+                        logger.debug("Application is up to date according to Google Drive: %s", APP_VERSION)
+                        self.update_not_available.emit(APP_VERSION)
+                        self.check_finished.emit(False)
+                        return
+            except Exception as ex:
+                logger.debug("Google Apps Script update check skipped: %s", ex)
+
+        # 2. Fallback: Query GitHub Releases API
         url = f"https://api.github.com/repos/{self.repo_slug}/releases/latest"
         token = get_update_token()
 
@@ -258,29 +288,55 @@ class DownloadWorker(QThread):
         try:
             temp_dir = tempfile.mkdtemp(prefix="pst_update_")
             target_path = Path(temp_dir) / self.asset_name
-            self.status.emit("Downloading release package from GitHub...")
+            is_gdrive = "drive.google.com" in self.url.lower() or "googleusercontent.com" in self.url.lower()
+            if is_gdrive:
+                self.status.emit("Downloading release package from Google Drive...")
+                import requests
+                sess = requests.Session()
+                sess.headers.update({"User-Agent": f"PedneSewaTrustRegistry/{APP_VERSION}"})
+                resp = sess.get(self.url, stream=True, timeout=90.0)
+                for k, v in resp.cookies.items():
+                    if k.startswith('download_warning'):
+                        confirm_url = f"{self.url}&confirm={v}"
+                        resp = sess.get(confirm_url, stream=True, timeout=90.0)
+                        break
 
-            headers = {"User-Agent": f"PedneSewaTrustRegistry/{APP_VERSION}"}
-            if self.token:
-                headers["Authorization"] = f"Bearer {self.token}"
-                headers["Accept"] = "application/octet-stream"
-
-            opener = self._create_opener()
-            req = urllib.request.Request(self.url, headers=headers)
-            with opener.open(req, timeout=45.0) as response, open(target_path, 'wb') as out_file:
-                total_size = int(response.info().get('Content-Length', -1))
+                total_size = int(resp.headers.get('content-length', -1))
                 bytes_downloaded = 0
                 block_size = 65536
+                with open(target_path, 'wb') as out_file:
+                    for chunk in resp.iter_content(chunk_size=block_size):
+                        if chunk:
+                            out_file.write(chunk)
+                            bytes_downloaded += len(chunk)
+                            if total_size > 0:
+                                pct = int((bytes_downloaded / total_size) * 80)
+                                self.progress.emit(max(1, pct))
+                            else:
+                                self.progress.emit(min(79, 10 + int(bytes_downloaded / 1048576)))
+            else:
+                self.status.emit("Downloading release package...")
+                headers = {"User-Agent": f"PedneSewaTrustRegistry/{APP_VERSION}"}
+                if self.token:
+                    headers["Authorization"] = f"Bearer {self.token}"
+                    headers["Accept"] = "application/octet-stream"
 
-                while True:
-                    buffer = response.read(block_size)
-                    if not buffer:
-                        break
-                    bytes_downloaded += len(buffer)
-                    out_file.write(buffer)
-                    if total_size > 0:
-                        pct = int((bytes_downloaded / total_size) * 80)
-                        self.progress.emit(max(1, pct))
+                opener = self._create_opener()
+                req = urllib.request.Request(self.url, headers=headers)
+                with opener.open(req, timeout=45.0) as response, open(target_path, 'wb') as out_file:
+                    total_size = int(response.info().get('Content-Length', -1))
+                    bytes_downloaded = 0
+                    block_size = 65536
+
+                    while True:
+                        buffer = response.read(block_size)
+                        if not buffer:
+                            break
+                        bytes_downloaded += len(buffer)
+                        out_file.write(buffer)
+                        if total_size > 0:
+                            pct = int((bytes_downloaded / total_size) * 80)
+                            self.progress.emit(max(1, pct))
 
             self.progress.emit(85)
 
@@ -352,6 +408,26 @@ class DownloadWorker(QThread):
         except Exception as e:
             logger.error("Download worker error: %s", e)
             self.download_finished.emit(False, f"Download failed: {e}", "", False)
+
+
+class PreUpdateBackupWorker(QThread):
+    """
+    Performs mandatory cloud backup to Google Sheets before applying any software update.
+    Guarantees all Candidates and Visiting Register entries are pushed to the cloud.
+    """
+    backup_finished = Signal(bool, str)
+
+    def run(self):
+        try:
+            from sync.sync_engine import sync_engine
+            res = sync_engine.run_sync(is_manual=True)
+            if isinstance(res, dict) and res.get("status") == "SUCCESS":
+                self.backup_finished.emit(True, "Cloud backup completed successfully.")
+            else:
+                msg = res.get("message", "Cloud backup could not be completed.") if isinstance(res, dict) else "Cloud backup skipped."
+                self.backup_finished.emit(False, msg)
+        except Exception as e:
+            self.backup_finished.emit(False, str(e))
 
 
 class UpdateDialog(QDialog):
@@ -442,9 +518,36 @@ class UpdateDialog(QDialog):
         self.btn_later.setEnabled(False)
         self.btn_update.setEnabled(False)
         self.progress_bar.setVisible(True)
+        self.progress_bar.setRange(0, 0)
         self.lbl_status.setVisible(True)
-        self.lbl_status.setText("Connecting to release server...")
+        self.lbl_status.setText("Backing up all local registry data to Google Cloud before update...")
 
+        self.backup_worker = PreUpdateBackupWorker(self)
+        self.backup_worker.backup_finished.connect(self._on_pre_update_backup_finished)
+        self.backup_worker.start()
+
+    def _on_pre_update_backup_finished(self, success: bool, message: str):
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(0)
+
+        if not success:
+            reply = QMessageBox.question(
+                self,
+                "Cloud Backup Notice",
+                "Automatic cloud backup to Google Sheets could not be completed (network may be offline).\n\n"
+                "Your local SQLite database is stored separately in AppData and will not be touched.\n\n"
+                "Do you want to proceed with downloading and applying the update?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+            if reply != QMessageBox.Yes:
+                self.btn_later.setEnabled(True)
+                self.btn_update.setEnabled(True)
+                self.progress_bar.setVisible(False)
+                self.lbl_status.setText("Update deferred by operator.")
+                return
+
+        self.lbl_status.setText("Connecting to release server...")
         self.downloader = DownloadWorker(self.download_url, self.asset_name, self.checksum_url)
         self.downloader.progress.connect(self.progress_bar.setValue)
         self.downloader.status.connect(self.lbl_status.setText)
@@ -484,7 +587,7 @@ class UpdateDialog(QDialog):
         # replaces files in app_dir, launches updated EXE, and deletes itself.
         if is_directory:
             copy_cmd = (
-                f'robocopy "{staged_path}" "{app_dir}" /E /R:10 /W:1 /XF config.json *.db *.sqlite *.sqlite3 *.log *.pdf *.xlsx *.csv >nul 2>&1\n'
+                f'robocopy "{staged_path}" "{app_dir}" /E /R:10 /W:1 /XF config.json *.db *.sqlite *.sqlite3 *.log *.pdf *.xlsx *.csv *.bak /XD backups exports logs >nul 2>&1\n'
                 f'if !ERRORLEVEL! GEQ 8 (\n'
                 f'    xcopy /E /Y /I /Q /H /R "{staged_path}\\*" "{app_dir}\\" >nul 2>&1\n'
                 f')'

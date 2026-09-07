@@ -27,7 +27,8 @@ DEFAULT_SPREADSHEET_ID = "1DC9TY2D2_mJgyJJ_hM3a91UsSOuqssWiBuMKhaxoW_0"
 DEFAULT_WORKSHEET_NAME = "Candidates"
 DEFAULT_VISITING_WORKSHEET_NAME = "Visiting Register"
 DEFAULT_SYNC_INTERVAL_MINUTES = 10
-DEFAULT_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx_YOUR_DEPLOYMENT_ID/exec"
+DEFAULT_APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyu3vSEexLajN3XmxGGsRE2ajU8gPDeY8ZKbo9y4B0W2Dru7RbluR8vtKVkFsnYjPaP/exec"
+DEFAULT_BACKUP_API_KEY = "vBsc8aMrQjjdLaXEc2u3rHkgdlwqoEq9"
 
 # Common Visit Purposes for Visiting Register
 VISIT_PURPOSES = [

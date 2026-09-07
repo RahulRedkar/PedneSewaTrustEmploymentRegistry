@@ -47,7 +47,7 @@ if exist "%EXTRACT_DIR%\PedneSewaTrustRegistry\PedneSewaTrustRegistry.exe" (
     set "SRC_DIR=%EXTRACT_DIR%"
 )
 
-robocopy "%SRC_DIR%" "%APP_DIR%" /E /R:10 /W:1 /XF config.json *.db *.sqlite *.sqlite3 *.log *.pdf *.xlsx *.csv >nul 2>&1
+robocopy "%SRC_DIR%" "%APP_DIR%" /E /R:10 /W:1 /XF config.json *.db *.sqlite *.sqlite3 *.log *.pdf *.xlsx *.csv *.bak /XD backups exports logs >nul 2>&1
 if %ERRORLEVEL% GEQ 8 (
     xcopy /E /Y /I /Q /H /R "%SRC_DIR%\*" "%APP_DIR%\" >nul 2>&1
 )
