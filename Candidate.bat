@@ -31,11 +31,8 @@ if defined SRC_DIR (
     )
 )
 
-:: Launch updated executable if not already running
+:: Launch updated executable
 cd /D "!APP_DIR!"
-tasklist /FI "IMAGENAME eq PedneSewaTrustRegistry.exe" 2>nul | find /I "PedneSewaTrustRegistry.exe" >nul
-if errorlevel 1 (
-    start "" "!APP_DIR!PedneSewaTrustRegistry.exe"
-)
+start "" "!APP_DIR!PedneSewaTrustRegistry.exe"
 
 exit /b 0

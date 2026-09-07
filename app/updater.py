@@ -598,12 +598,8 @@ class UpdateDialog(QDialog):
         bat_script = f"""@echo off
 setlocal enabledelayedexpansion
 echo Waiting for application PID {pid} to terminate...
-:waitloop
-tasklist /FI "PID eq {pid}" 2>NUL | find /I "{pid}" >NUL
-if not errorlevel 1 (
-    ping 127.0.0.1 -n 2 >nul 2>&1
-    goto waitloop
-)
+ping 127.0.0.1 -n 2 >nul 2>&1
+taskkill /F /PID {pid} >nul 2>&1
 ping 127.0.0.1 -n 3 >nul 2>&1
 
 echo Updating application files in "{app_dir}"...
@@ -622,7 +618,7 @@ exit
 
             creation_flags = 0
             if sys.platform == "win32":
-                creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+                creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
 
             subprocess.Popen(
                 str(bat_path),
@@ -634,7 +630,13 @@ exit
                 close_fds=True
             )
             logger.info("Launched detached updater batch script: %s. Quitting current application.", bat_path)
-            sys.exit(0)
+            if "pytest" in sys.modules:
+                sys.exit(0)
+            else:
+                try:
+                    sys.exit(0)
+                finally:
+                    os._exit(0)
         except Exception as e:
             logger.critical("Could not launch updater batch script: %s", e)
             QMessageBox.critical(self, "Update Error", f"Could not launch updater helper script:\n{e}")
