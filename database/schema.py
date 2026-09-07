@@ -274,6 +274,7 @@ CREATE TABLE IF NOT EXISTS visiting_register (
     village TEXT NOT NULL,
     mobile TEXT NOT NULL,
     purpose TEXT NOT NULL,
+    remarks TEXT DEFAULT '',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     sync_status TEXT NOT NULL DEFAULT 'PENDING',
@@ -315,7 +316,7 @@ CREATE INDEX IF NOT EXISTS idx_visiting_mobile ON visiting_register(mobile);
 class MigrationManager:
     """Manages versioned database schema migrations with automated pre-migration backups."""
 
-    CURRENT_VERSION = 5
+    CURRENT_VERSION = 6
 
     @staticmethod
     def get_current_version(conn: sqlite3.Connection) -> int:
@@ -470,6 +471,26 @@ class MigrationManager:
                 conn.rollback()
                 logger.error("Migration to v5 failed: %s", e)
                 raise e
+
+        if current_v < 6:
+            try:
+                cursor.execute("BEGIN IMMEDIATE TRANSACTION;")
+                cursor.execute("PRAGMA table_info(visiting_register)")
+                vis_cols = [c[1] for c in cursor.fetchall()]
+                if "remarks" not in vis_cols:
+                    cursor.execute("ALTER TABLE visiting_register ADD COLUMN remarks TEXT DEFAULT '';")
+                cursor.execute(
+                    "INSERT OR REPLACE INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
+                    (6, now_str, "Add remarks column to visiting_register for other purpose notes")
+                )
+                conn.commit()
+                current_v = 6
+                logger.info("Successfully applied database migration to version %d", current_v)
+            except Exception as e:
+                conn.rollback()
+                logger.error("Migration to v6 failed: %s", e)
+                raise e
+
 
 
 

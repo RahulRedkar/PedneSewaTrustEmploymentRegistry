@@ -42,12 +42,21 @@ class SyncEngine:
         pending_visitors = repository.get_pending_sync_visitors()
         total_pending = len(pending_candidates) + len(pending_visitors)
 
+        is_full_push = False
         if total_pending == 0:
-            msg = "All candidate and visitor records are already backed up to the cloud."
-            logger.info(msg)
-            signals.sync_status_changed.emit("synced", "Backup: Up to date")
-            signals.sync_completed.emit({"records_pushed": 0, "message": msg})
-            return {"status": "SUCCESS", "records_pushed": 0, "message": msg}
+            if is_manual:
+                # If manual backup requested and nothing is pending, push all active records to ensure Google Sheets is complete
+                pending_candidates = repository.get_all_candidates(include_deleted=False)
+                pending_visitors = repository.get_all_visitors(include_deleted=False)
+                total_pending = len(pending_candidates) + len(pending_visitors)
+                is_full_push = True
+
+            if total_pending == 0:
+                msg = "All candidate and visitor records are already backed up to the cloud."
+                logger.info(msg)
+                signals.sync_status_changed.emit("synced", "Backup: Up to date")
+                signals.sync_completed.emit({"records_pushed": 0, "candidates_pushed": 0, "visitors_pushed": 0, "message": msg})
+                return {"status": "SUCCESS", "records_pushed": 0, "candidates_pushed": 0, "visitors_pushed": 0, "message": msg}
 
         signals.sync_status_changed.emit(
             "pending",
@@ -78,7 +87,7 @@ class SyncEngine:
 
                 repository.log_sync_event(
                     pushed_count, 0, "SUCCESS",
-                    details=f"Synced {len(pending_candidates)} candidates and {len(pending_visitors)} visitors via Google Apps Script"
+                    details=f"Synced {len(pending_candidates)} candidates and {len(pending_visitors)} visitors via Google Apps Script (Full: {is_full_push})"
                 )
                 signals.sync_status_changed.emit("synced", "Backup: Complete")
                 signals.sync_completed.emit({
@@ -91,7 +100,12 @@ class SyncEngine:
                     "Backup completed successfully: %d records pushed to cloud (%d candidates, %d visitors).",
                     pushed_count, len(pending_candidates), len(pending_visitors)
                 )
-                return {"status": "SUCCESS", "records_pushed": pushed_count}
+                return {
+                    "status": "SUCCESS",
+                    "records_pushed": pushed_count,
+                    "candidates_pushed": len(pending_candidates),
+                    "visitors_pushed": len(pending_visitors)
+                }
             else:
                 err_detail = res.get("error", "Failed to communicate with backup gateway")
                 user_msg = f"Cloud synchronisation could not be completed: {err_detail}"

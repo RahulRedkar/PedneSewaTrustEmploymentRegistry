@@ -1765,14 +1765,14 @@ class CandidateRepository:
                 """
                 INSERT INTO visiting_register (
                     sr_no, visit_date, visit_time, candidate_name, village,
-                    mobile, purpose, created_at, updated_at, sync_status,
+                    mobile, purpose, remarks, created_at, updated_at, sync_status,
                     last_synced_at, is_deleted
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     visitor.sr_no, visitor.visit_date, visitor.visit_time,
                     visitor.candidate_name, visitor.village, visitor.mobile,
-                    visitor.purpose, visitor.created_at, visitor.updated_at,
+                    visitor.purpose, visitor.remarks, visitor.created_at, visitor.updated_at,
                     visitor.sync_status, visitor.last_synced_at, visitor.is_deleted
                 )
             )
@@ -1792,13 +1792,13 @@ class CandidateRepository:
                 """
                 UPDATE visiting_register SET
                     visit_date = ?, visit_time = ?, candidate_name = ?,
-                    village = ?, mobile = ?, purpose = ?, updated_at = ?,
+                    village = ?, mobile = ?, purpose = ?, remarks = ?, updated_at = ?,
                     sync_status = ?
                 WHERE id = ?
                 """,
                 (
                     visitor.visit_date, visitor.visit_time, visitor.candidate_name,
-                    visitor.village, visitor.mobile, visitor.purpose,
+                    visitor.village, visitor.mobile, visitor.purpose, visitor.remarks,
                     visitor.updated_at, visitor.sync_status, visitor.id
                 )
             )
@@ -1848,8 +1848,8 @@ class CandidateRepository:
 
         if query:
             q = f"%{query.strip()}%"
-            sql += " AND (candidate_name LIKE ? OR mobile LIKE ? OR purpose LIKE ? OR CAST(sr_no AS TEXT) LIKE ?)"
-            params.extend([q, q, q, q])
+            sql += " AND (candidate_name LIKE ? OR mobile LIKE ? OR purpose LIKE ? OR remarks LIKE ? OR CAST(sr_no AS TEXT) LIKE ?)"
+            params.extend([q, q, q, q, q])
 
         if date_filter:
             sql += " AND visit_date = ?"
@@ -1945,18 +1945,19 @@ class CandidateRepository:
                 village = str(item.get("village") or "").strip()
                 mobile = clean_mobile(str(item.get("mobile") or "")) if item.get("mobile") else ""
                 purpose = str(item.get("purpose") or "General Inquiry").strip()
+                remarks = str(item.get("remarks") or "").strip()
 
                 conn.execute(
                     """
                     INSERT INTO visiting_register (
                         sr_no, visit_date, visit_time, candidate_name, village,
-                        mobile, purpose, created_at, updated_at, sync_status,
+                        mobile, purpose, remarks, created_at, updated_at, sync_status,
                         last_synced_at, is_deleted
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         sr_no, visit_date, visit_time, name, village, mobile,
-                        purpose, now_iso, now_iso, SYNC_STATUS_PENDING, None, 0
+                        purpose, remarks, now_iso, now_iso, SYNC_STATUS_PENDING, None, 0
                     )
                 )
                 inserted += 1

@@ -22,7 +22,8 @@ HEADER_SYNONYMS = {
     "candidate_name": ["name of candidate", "candidate name", "name", "visitor name", "full name", "candidate"],
     "village": ["address (village)", "address(village)", "address", "village", "location", "residence", "area"],
     "mobile": ["mobile no.", "mobile no", "mobile", "mobile number", "contact no", "contact", "phone", "phone no"],
-    "purpose": ["purpose of visit", "purpose", "reason", "visit purpose", "work", "details", "notes"]
+    "purpose": ["purpose of visit", "purpose", "reason", "visit purpose", "work"],
+    "remarks": ["remarks", "remark", "notes", "comment", "comments", "other remarks", "details"]
 }
 
 

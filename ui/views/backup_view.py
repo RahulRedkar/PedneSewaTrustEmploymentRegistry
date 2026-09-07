@@ -198,10 +198,20 @@ class BackupView(QWidget):
         if getattr(self, "_manual_backup_active", False):
             self._manual_backup_active = False
             pushed = info.get("records_pushed", 0)
+            c_pushed = info.get("candidates_pushed", pushed)
+            v_pushed = info.get("visitors_pushed", 0)
             if pushed > 0:
-                body = f"Cloud backup completed successfully.\n\n{pushed} candidate records synchronized with the cloud repository."
+                body = (
+                    f"Cloud backup completed successfully.\n\n"
+                    f"• Candidate Records: {c_pushed} synchronized\n"
+                    f"• Visiting Register Entries: {v_pushed} synchronized\n\n"
+                    f"Both Google Sheets tabs ('Candidates' and 'Visiting Register') are now fully updated."
+                )
             else:
-                body = "Cloud backup is already up to date.\n\nAll candidate records have been synchronized with the cloud repository."
+                body = (
+                    "Cloud backup is already up to date.\n\n"
+                    "All candidate and visiting register records have been synchronized with Google Sheets."
+                )
             QMessageBox.information(
                 self,
                 "Cloud Backup Complete",

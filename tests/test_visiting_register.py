@@ -235,3 +235,80 @@ def test_dual_cloud_sync_candidates_and_visitors():
         assert len(kwargs["candidates"]) == 1
         assert len(kwargs["visitors"]) == 1
 
+
+def test_visitor_remarks_support(repo):
+    """Verifies that remarks are properly saved, retrieved, updated, and searched."""
+    v = VisitorRecord(
+        candidate_name="Praveen Vernekar",
+        village="Pernem",
+        mobile="9822998877",
+        purpose="Other",
+        remarks="Passport verification and trust documentation inquiry"
+    )
+    v_id = repo.save_visitor(v)
+    assert v_id is not None
+
+    loaded = repo.get_visitor_by_id(v_id)
+    assert loaded.purpose == "Other"
+    assert loaded.remarks == "Passport verification and trust documentation inquiry"
+
+    # Search by remarks substring
+    search_res = repo.search_visitors(query="Passport")
+    assert len(search_res) == 1
+    assert search_res[0].candidate_name == "Praveen Vernekar"
+
+    # Update remarks
+    loaded.remarks = "Updated: completed verification"
+    repo.update_visitor(loaded)
+    reloaded = repo.get_visitor_by_id(v_id)
+    assert reloaded.remarks == "Updated: completed verification"
+
+
+def test_manual_full_backup_when_zero_pending():
+    """Verifies that is_manual=True triggers full candidate + visitor push when 0 pending."""
+    from unittest.mock import MagicMock, patch
+    from models.candidate import Candidate
+    from sync.sync_engine import SyncEngine
+
+    temp_dir = tempfile.mkdtemp()
+    db_path = os.path.join(temp_dir, "test_manual_sync.db")
+    test_mgr = DatabaseManager(db_path)
+    r = CandidateRepository(db_manager_instance=test_mgr)
+    engine = SyncEngine()
+
+    c = r.save_candidate(Candidate(full_name="Already Synced Cand", mobile="9822119988", village="Corgao"))
+    v_id = r.save_visitor(VisitorRecord(candidate_name="Already Synced Vis", mobile="9822119977", village="Mandrem", purpose="Registration"))
+
+    # Mark both as SYNCED initially
+    r.mark_candidates_synced([c.candidate_id], datetime.now().isoformat())
+    r.mark_visitors_synced([v_id], datetime.now().isoformat())
+
+    # Pending count is 0
+    assert len(r.get_pending_sync_candidates()) == 0
+    assert len(r.get_pending_sync_visitors()) == 0
+
+    mock_client = MagicMock()
+    mock_client.is_configured.return_value = True
+    mock_client.push_backup.return_value = {"status": "SUCCESS", "records_pushed": 2}
+
+    with patch("sync.sync_engine.repository", r), \
+         patch("sync.sync_engine.apps_script_client", mock_client):
+
+        # Automatic sync (is_manual=False) should do nothing
+        res_auto = engine.run_sync(is_manual=False)
+        assert res_auto["records_pushed"] == 0
+        mock_client.push_backup.assert_not_called()
+
+        # Manual sync (is_manual=True) should fetch all active records and push
+        res_manual = engine.run_sync(is_manual=True)
+        assert res_manual["status"] == "SUCCESS"
+        assert res_manual["records_pushed"] == 2
+        assert res_manual["candidates_pushed"] == 1
+        assert res_manual["visitors_pushed"] == 1
+
+        mock_client.push_backup.assert_called_once()
+        _, kwargs = mock_client.push_backup.call_args
+        assert len(kwargs["candidates"]) == 1
+        assert len(kwargs["visitors"]) == 1
+
+

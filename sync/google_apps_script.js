@@ -75,7 +75,7 @@ var CANONICAL_COLUMNS = [
   { key: "updated_at", header: "Updated At" }
 ];
 
-// 9 Canonical Visiting Register Column Definitions
+// 10 Canonical Visiting Register Column Definitions
 var VISITING_CANONICAL_COLUMNS = [
   { key: "sr_no", header: "Sr No." },
   { key: "visit_date", header: "Date" },
@@ -84,6 +84,7 @@ var VISITING_CANONICAL_COLUMNS = [
   { key: "village", header: "Address (Village)" },
   { key: "mobile", header: "Mobile No." },
   { key: "purpose", header: "Purpose of Visit" },
+  { key: "remarks", header: "Remarks" },
   { key: "created_at", header: "Created At" },
   { key: "updated_at", header: "Updated At" }
 ];
@@ -110,17 +111,28 @@ function doPost(e) {
     var authResult = validateApiKey(payload.api_key);
     if (!authResult.valid) return createJsonResponse({ status: "ERROR", message: authResult.error }, 401);
 
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    if (!ss) {
-      var propId = PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID") || "1DC9TY2D2_mJgyJJ_hM3a91UsSOuqssWiBuMKhaxoW_0";
+    var targetSpreadsheetId = (payload.spreadsheet_id || "").trim() ||
+      PropertiesService.getScriptProperties().getProperty("SPREADSHEET_ID") ||
+      "1DC9TY2D2_mJgyJJ_hM3a91UsSOuqssWiBuMKhaxoW_0";
+
+    var ss = null;
+    if (targetSpreadsheetId) {
       try {
-        ss = SpreadsheetApp.openById(propId);
+        ss = SpreadsheetApp.openById(targetSpreadsheetId);
       } catch (openErr) {
-        return createJsonResponse({
-          status: "ERROR",
-          message: "Failed to open spreadsheet: " + openErr.toString()
-        }, 500);
+        // Fall back to active spreadsheet
       }
+    }
+    if (!ss) {
+      try {
+        ss = SpreadsheetApp.getActiveSpreadsheet();
+      } catch (e) {}
+    }
+    if (!ss) {
+      return createJsonResponse({
+        status: "ERROR",
+        message: "Failed to open Google Spreadsheet. Please verify spreadsheet ID or script permissions."
+      }, 500);
     }
 
     // 1. Process Candidates
@@ -444,6 +456,15 @@ function upsertVisitors(sheet, visitors) {
   }
 
   var activeHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+
+  // Check if active headers need expansion for Remarks or newly added columns
+  if (activeHeaders.length < headerNames.length) {
+    var missingHeaders = headerNames.slice(activeHeaders.length);
+    sheet.getRange(1, activeHeaders.length + 1, 1, missingHeaders.length).setValues([missingHeaders]);
+    formatHeaderRow(sheet, headerNames.length);
+    activeHeaders = headerNames;
+    lastCol = activeHeaders.length;
+  }
 
   // 2. Build Column A (Sr No.) index
   var srNoIndex = {};

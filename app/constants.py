@@ -238,6 +238,7 @@ VISITING_REGISTER_COLUMNS = [
     "Address (Village)",
     "Mobile No.",
     "Purpose of Visit",
+    "Remarks",
     "Created At",
     "Updated At"
 ]

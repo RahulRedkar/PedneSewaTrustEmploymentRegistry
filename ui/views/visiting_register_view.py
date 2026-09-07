@@ -202,7 +202,7 @@ class VisitingRegisterView(QWidget):
 
         # 4. Data Table
         self.table = QTableWidget(self)
-        self.table.setColumnCount(9)
+        self.table.setColumnCount(10)
         self.table.setHorizontalHeaderLabels([
             "Sr No.",
             "Date",
@@ -211,6 +211,7 @@ class VisitingRegisterView(QWidget):
             "Address (Village)",
             "Mobile No.",
             "Purpose of Visit",
+            "Remarks",
             "Cloud Backup",
             "Actions"
         ])
@@ -222,9 +223,10 @@ class VisitingRegisterView(QWidget):
         header.setSectionResizeMode(3, QHeaderView.Stretch)           # Name
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)  # Village
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)  # Mobile
-        header.setSectionResizeMode(6, QHeaderView.Stretch)           # Purpose
-        header.setSectionResizeMode(7, QHeaderView.ResizeToContents)  # Cloud Backup
-        header.setSectionResizeMode(8, QHeaderView.ResizeToContents)  # Actions
+        header.setSectionResizeMode(6, QHeaderView.ResizeToContents)  # Purpose
+        header.setSectionResizeMode(7, QHeaderView.Stretch)           # Remarks
+        header.setSectionResizeMode(8, QHeaderView.ResizeToContents)  # Cloud Backup
+        header.setSectionResizeMode(9, QHeaderView.ResizeToContents)  # Actions
 
         self.table.verticalHeader().setVisible(False)
         self.table.setAlternatingRowColors(True)
@@ -307,6 +309,7 @@ class VisitingRegisterView(QWidget):
                     query in v.mobile.lower() or
                     query in v.village.lower() or
                     query in v.purpose.lower() or
+                    query in (v.remarks or "").lower() or
                     query in str(v.sr_no)
                 )
                 if not match_query:
@@ -380,13 +383,17 @@ class VisitingRegisterView(QWidget):
             purpose_item = QTableWidgetItem(v.purpose or "—")
             self.table.setItem(row_idx, 6, purpose_item)
 
-            # 7: Cloud Backup Status Badge
-            badge_item = self._create_cloud_badge_item(v)
-            self.table.setItem(row_idx, 7, badge_item)
+            # 7: Remarks
+            remarks_item = QTableWidgetItem(v.remarks or "—")
+            self.table.setItem(row_idx, 7, remarks_item)
 
-            # 8: Action Buttons (Edit, Delete)
+            # 8: Cloud Backup Status Badge
+            badge_item = self._create_cloud_badge_item(v)
+            self.table.setItem(row_idx, 8, badge_item)
+
+            # 9: Action Buttons (Edit, Delete)
             actions_widget = self._create_actions_widget(v)
-            self.table.setCellWidget(row_idx, 8, actions_widget)
+            self.table.setCellWidget(row_idx, 9, actions_widget)
 
     def _create_cloud_badge_item(self, v: VisitorRecord) -> QTableWidgetItem:
         item = QTableWidgetItem()

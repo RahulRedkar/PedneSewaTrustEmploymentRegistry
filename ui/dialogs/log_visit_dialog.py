@@ -1,4 +1,4 @@
-﻿"""
+"""
 Log Walk-in Visit Dialog for Pedne Sewa Trust - Visiting Register.
 Enables quick entry and editing of walk-in candidate visits with auto-assigned Sr No,
 date/time defaults, candidate autocomplete, village selection, and purpose presets.
@@ -127,7 +127,14 @@ class LogVisitDialog(QDialog):
         self.purpose_combo = QComboBox(self)
         self.purpose_combo.setEditable(True)
         self.purpose_combo.addItems(VISIT_PURPOSES)
+        self.purpose_combo.currentTextChanged.connect(self._on_purpose_changed)
         form_layout.addRow("Purpose of Visit *:", self.purpose_combo)
+
+        # 8. Remarks (if Other / Notes)
+        self.remarks_edit = QLineEdit(self)
+        self.remarks_edit.setPlaceholderText("Optional notes / details (Required if 'Other')")
+        self.remarks_edit.setClearButtonEnabled(True)
+        form_layout.addRow("Remarks (if Other):", self.remarks_edit)
 
         layout.addLayout(form_layout)
 
@@ -236,6 +243,26 @@ class LogVisitDialog(QDialog):
             else:
                 self.purpose_combo.setCurrentText(v.purpose)
 
+        self.remarks_edit.setText(v.remarks or "")
+        self._on_purpose_changed(self.purpose_combo.currentText())
+
+    def _on_purpose_changed(self, text: str):
+        """Highlights remarks input when 'Other' purpose is selected."""
+        is_other = "other" in str(text or "").strip().lower()
+        if is_other:
+            self.remarks_edit.setPlaceholderText("Please specify details / reason (Required for Other)")
+            self.remarks_edit.setStyleSheet("""
+                QLineEdit {
+                    border: 1.5px solid #2563EB;
+                    background-color: #EFF6FF;
+                    border-radius: 4px;
+                    padding: 4px 8px;
+                }
+            """)
+        else:
+            self.remarks_edit.setPlaceholderText("Optional notes / details (Required if 'Other')")
+            self.remarks_edit.setStyleSheet("")
+
     def _on_save(self):
         name = self.name_edit.text().strip()
         if not name:
@@ -267,6 +294,16 @@ class LogVisitDialog(QDialog):
         if not purpose:
             purpose = "General Inquiry"
 
+        remarks = self.remarks_edit.text().strip()
+        if "other" in purpose.lower() and not remarks:
+            QMessageBox.warning(
+                self,
+                "Remarks Required",
+                "Please provide remarks / details explaining the purpose of visit when 'Other' is selected."
+            )
+            self.remarks_edit.setFocus()
+            return
+
         visit_date = self.date_edit.date().toString("yyyy-MM-dd")
         visit_time = self.time_edit.time().toString("hh:mm AP")
         village = self.village_combo.currentText().strip()
@@ -283,6 +320,7 @@ class LogVisitDialog(QDialog):
             self.visitor.village = village
             self.visitor.mobile = saved_mobile
             self.visitor.purpose = purpose
+            self.visitor.remarks = remarks
             repository.update_visitor(self.visitor)
             self.saved_record = self.visitor
             logger.info("Updated visitor Sr No. %d in database", self.visitor.sr_no)
@@ -294,7 +332,8 @@ class LogVisitDialog(QDialog):
                 candidate_name=name,
                 village=village,
                 mobile=saved_mobile,
-                purpose=purpose
+                purpose=purpose,
+                remarks=remarks
             )
             rec_id = repository.save_visitor(new_record)
             new_record.id = rec_id

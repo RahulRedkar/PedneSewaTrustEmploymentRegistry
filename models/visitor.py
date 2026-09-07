@@ -22,6 +22,7 @@ class VisitorRecord:
     village: str = ""
     mobile: str = ""
     purpose: str = ""
+    remarks: str = ""
     created_at: str = field(default_factory=lambda: datetime.now().isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now().isoformat())
     sync_status: str = "PENDING"
@@ -39,6 +40,7 @@ class VisitorRecord:
             "village": self.village,
             "mobile": self.mobile,
             "purpose": self.purpose,
+            "remarks": self.remarks,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "sync_status": self.sync_status,
@@ -59,6 +61,7 @@ class VisitorRecord:
             "village": self.village,
             "mobile": self.mobile,
             "purpose": self.purpose,
+            "remarks": self.remarks,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
@@ -73,6 +76,7 @@ class VisitorRecord:
             self.village,
             self.mobile,
             self.purpose,
+            self.remarks,
             self.created_at,
             self.updated_at,
         ]
@@ -90,9 +94,10 @@ class VisitorRecord:
             village=row["village"] or "",
             mobile=row["mobile"] or "",
             purpose=row["purpose"] or "",
+            remarks=row["remarks"] if "remarks" in keys and row["remarks"] is not None else "",
             created_at=row["created_at"] or "",
             updated_at=row["updated_at"] or "",
             sync_status=row["sync_status"] or "PENDING",
-            last_synced_at=row["last_synced_at"],
-            is_deleted=int(row["is_deleted"]) if row["is_deleted"] is not None else 0,
+            last_synced_at=row["last_synced_at"] if "last_synced_at" in keys else None,
+            is_deleted=int(row["is_deleted"]) if ("is_deleted" in keys and row["is_deleted"] is not None) else 0,
         )
