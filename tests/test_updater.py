@@ -484,3 +484,70 @@ def test_config_and_database_preservation():
         assert config.get("apps_script_url") == "https://script.google.com/macros/s/TEST_URL/exec"
         assert config.get("backup_api_key") == "test_backup_key_preserved"
         assert config.get("github_update_token") == "test_update_token_preserved"
+
+
+def test_updater_batch_script_syntax_and_process_management(qapp, tmp_path):
+    """
+    Verifies that the generated updater batch script:
+    1. Avoids ampersand syntax errors from APP_NAME.
+    2. Uses non-interactive ping delays instead of failing timeout commands.
+    3. Employs delayed expansion !ERRORLEVEL! for robust robocopy error handling.
+    4. Launches with explicit executable path and cleanly deletes itself.
+    5. Detaches via subprocess.Popen with DEVNULL streams and closed file descriptors.
+    """
+    from app.updater import UpdateDialog
+    import subprocess
+
+    dialog = UpdateDialog(
+        latest_ver="v2.0.4",
+        release_notes="Notes",
+        download_url="https://example.com/dl.zip",
+        asset_name="app.zip"
+    )
+
+    staged_dir = tmp_path / "extracted"
+    staged_dir.mkdir()
+    (staged_dir / "PedneSewaTrustRegistry.exe").write_text("DUMMY_EXE")
+
+    captured_script = []
+    captured_popen_kwargs = []
+
+    def mock_popen(cmd, **kwargs):
+        captured_popen_kwargs.append(kwargs)
+        bat_file = Path(cmd)
+        if bat_file.exists():
+            captured_script.append(bat_file.read_text(encoding="utf-8"))
+        return MagicMock()
+
+    with patch("sys.exit") as mock_exit, \
+         patch("subprocess.Popen", side_effect=mock_popen):
+        dialog._launch_updater_and_restart(str(staged_dir), is_directory=True)
+
+    assert mock_exit.called
+    assert len(captured_script) == 1
+    script = captured_script[0]
+
+    # Verify no unquoted ampersands that break CMD parsing
+    assert "& Candidate Registry" not in script
+    assert "echo Restarting application..." in script
+
+    # Verify non-interactive sleep using ping (timeout /t fails in detached cmd)
+    assert "timeout /t" not in script
+    assert "ping 127.0.0.1 -n 2" in script
+    assert "ping 127.0.0.1 -n 3" in script
+
+    # Verify delayed expansion for robocopy exit code
+    assert "!ERRORLEVEL!" in script
+
+    # Verify explicit start command
+    assert 'start "" "' in script
+    assert 'PedneSewaTrustRegistry.exe"' in script
+
+    # Verify subprocess detachment arguments
+    assert len(captured_popen_kwargs) == 1
+    kwargs = captured_popen_kwargs[0]
+    assert kwargs.get("stdin") == subprocess.DEVNULL
+    assert kwargs.get("stdout") == subprocess.DEVNULL
+    assert kwargs.get("stderr") == subprocess.DEVNULL
+    assert kwargs.get("close_fds") is True
+

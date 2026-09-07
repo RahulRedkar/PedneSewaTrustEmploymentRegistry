@@ -484,9 +484,8 @@ class UpdateDialog(QDialog):
         # replaces files in app_dir, launches updated EXE, and deletes itself.
         if is_directory:
             copy_cmd = (
-                f'if exist "{app_dir}\\_internal" rmdir /S /Q "{app_dir}\\_internal" >nul 2>&1\n'
                 f'robocopy "{staged_path}" "{app_dir}" /E /R:10 /W:1 /XF config.json *.db *.sqlite *.sqlite3 *.log *.pdf *.xlsx *.csv >nul 2>&1\n'
-                f'if %ERRORLEVEL% GEQ 8 (\n'
+                f'if !ERRORLEVEL! GEQ 8 (\n'
                 f'    xcopy /E /Y /I /Q /H /R "{staged_path}\\*" "{app_dir}\\" >nul 2>&1\n'
                 f')'
             )
@@ -497,21 +496,21 @@ class UpdateDialog(QDialog):
 setlocal enabledelayedexpansion
 echo Waiting for application PID {pid} to terminate...
 :waitloop
-tasklist /FI "PID eq {pid}" 2>NUL | find /I /N "{pid}">NUL
-if "%ERRORLEVEL%"=="0" (
-    timeout /t 1 /nobreak >nul
+tasklist /FI "PID eq {pid}" 2>NUL | find /I "{pid}" >NUL
+if not errorlevel 1 (
+    ping 127.0.0.1 -n 2 >nul 2>&1
     goto waitloop
 )
-timeout /t 2 /nobreak >nul
+ping 127.0.0.1 -n 3 >nul 2>&1
 
 echo Updating application files in "{app_dir}"...
 {copy_cmd}
 
-echo Restarting {APP_NAME}...
+echo Restarting application...
 cd /D "{app_dir}"
-start "" "PedneSewaTrustRegistry.exe"
+start "" "{app_dir}\\PedneSewaTrustRegistry.exe"
 
-del "%~f0"
+(goto) 2>nul & del "%~f0"
 exit
 """
         try:
@@ -522,7 +521,15 @@ exit
             if sys.platform == "win32":
                 creation_flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
 
-            subprocess.Popen(str(bat_path), shell=True, creationflags=creation_flags)
+            subprocess.Popen(
+                str(bat_path),
+                shell=True,
+                creationflags=creation_flags,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                close_fds=True
+            )
             logger.info("Launched detached updater batch script: %s. Quitting current application.", bat_path)
             sys.exit(0)
         except Exception as e:
