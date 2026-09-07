@@ -153,3 +153,54 @@ def test_unemployed_candidate_with_previous_experience(repo):
     assert updated.employment.years_experience == 4.0
     assert updated.employment.previous_experience == "Senior Accountant at ABC Logistics"
 
+
+def test_office_id_generation_and_segregation(repo):
+    # 1. Korgao Candidates (Prefix KPST)
+    k1 = Candidate(full_name="Korgao Candidate 1", mobile="9822000011", village="Corgao", intake_office="Korgao")
+    k1 = repo.save_candidate(k1)
+    assert k1.candidate_id == "KPST-000001"
+    assert k1.intake_office == "Korgao"
+
+    k2 = Candidate(full_name="Korgao Candidate 2", mobile="9822000012", village="Corgao", intake_office="Korgao")
+    k2 = repo.save_candidate(k2)
+    assert k2.candidate_id == "KPST-000002"
+    assert k2.intake_office == "Korgao"
+
+    # 2. Pernem Candidates (Prefix PST)
+    p1 = Candidate(full_name="Pernem Candidate 1", mobile="9822000021", village="Pernem (Town)", intake_office="Pernem")
+    p1 = repo.save_candidate(p1)
+    assert p1.candidate_id == "PST-000001"
+    assert p1.intake_office == "Pernem"
+
+    p2 = Candidate(full_name="Pernem Candidate 2", mobile="9822000022", village="Mandrem", intake_office="Pernem")
+    p2 = repo.save_candidate(p2)
+    assert p2.candidate_id == "PST-000002"
+    assert p2.intake_office == "Pernem"
+
+    # 3. Third Korgao candidate increments independently
+    k3 = Candidate(full_name="Korgao Candidate 3", mobile="9822000013", village="Corgao", intake_office="Korgao")
+    k3 = repo.save_candidate(k3)
+    assert k3.candidate_id == "KPST-000003"
+
+    # 4. Verification of database retrieval
+    ret_k1 = repo.get_candidate("KPST-000001")
+    assert ret_k1 is not None
+    assert ret_k1.intake_office == "Korgao"
+    assert ret_k1.full_name == "Korgao Candidate 1"
+
+    ret_p1 = repo.get_candidate("PST-000001")
+    assert ret_p1 is not None
+    assert ret_p1.intake_office == "Pernem"
+    assert ret_p1.full_name == "Pernem Candidate 1"
+
+    # 5. Verification of get_all_candidates
+    all_cands = repo.get_all_candidates()
+    assert len(all_cands) == 5
+    offices = {c.candidate_id: c.intake_office for c in all_cands}
+    assert offices["KPST-000001"] == "Korgao"
+    assert offices["KPST-000002"] == "Korgao"
+    assert offices["KPST-000003"] == "Korgao"
+    assert offices["PST-000001"] == "Pernem"
+    assert offices["PST-000002"] == "Pernem"
+
+

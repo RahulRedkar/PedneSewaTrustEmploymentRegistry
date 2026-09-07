@@ -154,3 +154,44 @@ def test_phase2_views_instantiation_and_components(qapp):
     rep = ReportsView()
     assert rep.tabs.count() == 8
 
+
+def test_office_ui_integration(qapp):
+    """Verifies that office selection is integrated into all relevant UI views."""
+    from ui.views.candidate_form_view import CandidateFormView
+    from ui.dialogs.candidate_edit_dialog import CandidateEditDialog
+    from ui.views.candidate_list_view import CandidateListView
+    from ui.views.settings_view import SettingsView
+
+    # 1. CandidateFormView has combo_intake_office with Pernem and Korgao
+    form = CandidateFormView()
+    assert hasattr(form, "combo_intake_office")
+    assert form.combo_intake_office.count() == 2
+    data_values = [form.combo_intake_office.itemData(i) for i in range(form.combo_intake_office.count())]
+    assert "Pernem" in data_values
+    assert "Korgao" in data_values
+
+    # 2. CandidateEditDialog has combo_intake_office and sets according to candidate
+    cand_k = Candidate(candidate_id="KPST-000001", full_name="Korgao Test", intake_office="Korgao")
+    dlg_k = CandidateEditDialog(cand_k)
+    assert hasattr(dlg_k, "combo_intake_office")
+    assert dlg_k.combo_intake_office.currentData() == "Korgao"
+
+    cand_p = Candidate(candidate_id="PST-000001", full_name="Pernem Test", intake_office="Pernem")
+    dlg_p = CandidateEditDialog(cand_p)
+    assert dlg_p.combo_intake_office.currentData() == "Pernem"
+
+    # 3. CandidateListView has filter_office with options
+    list_view = CandidateListView()
+    assert hasattr(list_view, "filter_office")
+    assert list_view.filter_office.count() == 3
+    filter_data = [list_view.filter_office.itemData(i) for i in range(list_view.filter_office.count())]
+    assert "" in filter_data
+    assert "Pernem" in filter_data
+    assert "Korgao" in filter_data
+
+    # 4. SettingsView has combo_default_office
+    settings = SettingsView()
+    assert hasattr(settings, "combo_default_office")
+    assert settings.combo_default_office.count() == 2
+
+

@@ -90,6 +90,7 @@ class Candidate:
     last_synced_at: Optional[str] = None
     is_deleted: bool = False
     is_demo: bool = False
+    intake_office: str = "Pernem"
 
     education: Education = field(default_factory=Education)
     employment: Employment = field(default_factory=Employment)
@@ -272,6 +273,7 @@ class Candidate:
             "languages": self.preferences.languages_known or "",
             "recruiter_consent_status": con_status,
             "recruiter_consent_date": con_date,
+            "intake_office": self.intake_office or "Pernem",
             "remarks": self.preferences.remarks or self.employment.govt_remarks or "",
             "created_at": self.created_at or "",
             "updated_at": self.updated_at or ""

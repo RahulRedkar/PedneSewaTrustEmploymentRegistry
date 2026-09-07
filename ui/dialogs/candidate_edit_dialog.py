@@ -92,6 +92,11 @@ class CandidateEditDialog(QDialog):
         self.edit_id.setStyleSheet("background-color: #F1F5F9; color: #475569;")
         col_left.addRow("Candidate ID:", self.edit_id)
 
+        self.combo_intake_office = QComboBox(w)
+        self.combo_intake_office.addItem("Pernem (PST)", "Pernem")
+        self.combo_intake_office.addItem("Korgao (KPST)", "Korgao")
+        col_left.addRow("Intake Office:", self.combo_intake_office)
+
         self.edit_name = QLineEdit(w)
         col_left.addRow("Full Name *:", self.edit_name)
 
@@ -479,6 +484,8 @@ class CandidateEditDialog(QDialog):
     def _populate_fields(self):
         c = self.candidate
         self.edit_id.setText(c.candidate_id)
+        idx = self.combo_intake_office.findData(getattr(c, "intake_office", "Pernem") or "Pernem")
+        self.combo_intake_office.setCurrentIndex(idx if idx >= 0 else 0)
         self.edit_name.setText(c.full_name)
         self.dob_picker.set_date_iso(c.dob)
         if c.age is not None:
@@ -599,6 +606,7 @@ class CandidateEditDialog(QDialog):
             return
 
         c = self.candidate
+        c.intake_office = self.combo_intake_office.currentData() or "Pernem"
         c.full_name = payload["full_name"]
         c.dob = self.dob_picker.get_date_iso()
         c.age = payload["age"]

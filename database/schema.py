@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS candidates (
     sync_status TEXT NOT NULL DEFAULT 'PENDING',
     last_synced_at TEXT,
     is_deleted INTEGER NOT NULL DEFAULT 0,
-    is_demo INTEGER NOT NULL DEFAULT 0
+    is_demo INTEGER NOT NULL DEFAULT 0,
+    intake_office TEXT NOT NULL DEFAULT 'Pernem'
 );
 
 CREATE TABLE IF NOT EXISTS education (
@@ -294,7 +295,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_type, entity_id)
 class MigrationManager:
     """Manages versioned database schema migrations with automated pre-migration backups."""
 
-    CURRENT_VERSION = 3
+    CURRENT_VERSION = 4
 
     @staticmethod
     def get_current_version(conn: sqlite3.Connection) -> int:
@@ -391,6 +392,27 @@ class MigrationManager:
             except Exception as e:
                 conn.rollback()
                 logger.error("Migration to v3 failed: %s", e)
+                raise e
+
+        if current_v < 4:
+            try:
+                cursor.execute("BEGIN IMMEDIATE TRANSACTION;")
+                cursor.execute("PRAGMA table_info(candidates)")
+                columns = [col[1] for col in cursor.fetchall()]
+                if "intake_office" not in columns:
+                    cursor.execute("ALTER TABLE candidates ADD COLUMN intake_office TEXT NOT NULL DEFAULT 'Pernem';")
+                cursor.execute("UPDATE candidates SET intake_office = 'Korgao' WHERE candidate_id LIKE 'KPST-%';")
+                cursor.execute("CREATE INDEX IF NOT EXISTS idx_candidates_office ON candidates(intake_office);")
+                cursor.execute(
+                    "INSERT OR REPLACE INTO schema_version (version, applied_at, description) VALUES (?, ?, ?)",
+                    (4, now_str, "Add intake_office to candidates with Korgao (KPST) / Pernem (PST) segregation")
+                )
+                conn.commit()
+                current_v = 4
+                logger.info("Successfully applied database migration to version %d", current_v)
+            except Exception as e:
+                conn.rollback()
+                logger.error("Migration to v4 failed: %s", e)
                 raise e
 
 

@@ -101,6 +101,12 @@ class CandidateListView(QWidget):
         filter_row = QHBoxLayout()
         filter_row.setSpacing(10)
 
+        self.filter_office = QComboBox(filter_card)
+        self.filter_office.addItem("All Offices", "")
+        self.filter_office.addItem("Pernem (PST)", "Pernem")
+        self.filter_office.addItem("Korgao (KPST)", "Korgao")
+        self.filter_office.currentIndexChanged.connect(self.apply_filters)
+
         self.filter_status = QComboBox(filter_card)
         self.filter_status.addItems(["All Statuses"] + EMPLOYMENT_STATUSES)
         self.filter_status.currentIndexChanged.connect(self.apply_filters)
@@ -118,10 +124,13 @@ class CandidateListView(QWidget):
         btn_clear_filters.setIcon(AppIcons.clear())
         btn_clear_filters.clicked.connect(self._clear_filters)
 
+        lbl_o = QLabel("Office:", filter_card); lbl_o.setStyleSheet("color: #64748B; font-weight: 600;")
         lbl_s = QLabel("Status:", filter_card); lbl_s.setStyleSheet("color: #64748B; font-weight: 600;")
         lbl_v = QLabel("Village:", filter_card); lbl_v.setStyleSheet("color: #64748B; font-weight: 600;")
         lbl_q = QLabel("Qualification:", filter_card); lbl_q.setStyleSheet("color: #64748B; font-weight: 600;")
 
+        filter_row.addWidget(lbl_o)
+        filter_row.addWidget(self.filter_office)
         filter_row.addWidget(lbl_s)
         filter_row.addWidget(self.filter_status)
         filter_row.addWidget(lbl_v)
@@ -164,12 +173,14 @@ class CandidateListView(QWidget):
 
     def _clear_filters(self):
         self.search_input.clear()
+        self.filter_office.setCurrentIndex(0)
         self.filter_status.setCurrentIndex(0)
         self.filter_village.setCurrentIndex(0)
         self.filter_qual.setCurrentIndex(0)
 
     def apply_filters(self):
         search_txt = self.search_input.text().strip().lower()
+        sel_office = self.filter_office.currentData()
         sel_status = self.filter_status.currentText()
         sel_village = self.filter_village.currentText()
         sel_qual = self.filter_qual.currentText()
@@ -179,6 +190,7 @@ class CandidateListView(QWidget):
             if search_txt:
                 searchable_str = (
                     f"{c.candidate_id} {c.full_name} {c.mobile} {c.alternate_mobile} {c.email} "
+                    f"{getattr(c, 'intake_office', '')} "
                     f"{c.village} {c.address} {c.education.highest_qualification} {c.education.degree_course} "
                     f"{c.education.skills} {c.employment.department_company} {c.employment.designation} "
                     f"{c.employment.previous_experience} "
@@ -187,6 +199,9 @@ class CandidateListView(QWidget):
                 ).lower()
                 if search_txt not in searchable_str:
                     continue
+
+            if sel_office and getattr(c, "intake_office", "Pernem") != sel_office:
+                continue
 
             if sel_status != "All Statuses" and c.employment.status != sel_status:
                 continue

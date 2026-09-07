@@ -13,7 +13,8 @@ from app.constants import (
     DEFAULT_SPREADSHEET_ID,
     DEFAULT_WORKSHEET_NAME,
     DEFAULT_SYNC_INTERVAL_MINUTES,
-    DEFAULT_APPS_SCRIPT_URL
+    DEFAULT_APPS_SCRIPT_URL,
+    OFFICE_PERNEM
 )
 from app.version import GITHUB_REPO_SLUG
 from utils.logger import logger
@@ -62,6 +63,7 @@ class AppConfig:
             "backup_dir": str(self.default_backup_dir),
             "export_dir": str(self.default_export_dir),
             "backup_retention_days": 30,
+            "default_office": OFFICE_PERNEM,
             "first_run_completed": False
         }
 

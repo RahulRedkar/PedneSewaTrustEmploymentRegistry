@@ -34,24 +34,31 @@ class CandidateRepository:
         with self.db.get_connection() as conn:
             init_database(conn)
 
-    def generate_candidate_id(self, conn: sqlite3.Connection) -> str:
+    def generate_candidate_id(self, conn: sqlite3.Connection, office: str = "Pernem") -> str:
         """
-        Generates the next unique sequential Candidate ID in format 'PST-000001'.
+        Generates the next unique sequential Candidate ID in format 'PST-000001' or 'KPST-000001'
+        based on the intake office (Korgao -> KPST, Pernem -> PST).
         Must be called within an active transaction for concurrency safety.
         """
+        from app.constants import OFFICE_KORGAO
+        prefix = "KPST" if office == OFFICE_KORGAO or office == "KPST" else "PST"
         cursor = conn.cursor()
-        cursor.execute("SELECT candidate_id FROM candidates WHERE candidate_id LIKE 'PST-%' ORDER BY rowid DESC")
+        if prefix == "KPST":
+            cursor.execute("SELECT candidate_id FROM candidates WHERE candidate_id LIKE 'KPST-%' ORDER BY rowid DESC")
+        else:
+            cursor.execute("SELECT candidate_id FROM candidates WHERE candidate_id LIKE 'PST-%' AND candidate_id NOT LIKE 'KPST-%' ORDER BY rowid DESC")
         rows = cursor.fetchall()
         max_num = 0
+        pattern = re.compile(rf"^{prefix}-(\d+)")
         for r in rows:
             cid = r["candidate_id"]
-            match = re.search(r"PST-(\d+)", cid)
+            match = pattern.search(cid)
             if match:
                 val = int(match.group(1))
                 if val > max_num:
                     max_num = val
         next_num = max_num + 1
-        return f"PST-{next_num:06d}"
+        return f"{prefix}-{next_num:06d}"
 
     def check_duplicates(
         self,
@@ -130,7 +137,7 @@ class CandidateRepository:
         now = datetime.now().isoformat()
         with self.db.transaction() as conn:
             if not candidate.candidate_id:
-                candidate.candidate_id = self.generate_candidate_id(conn)
+                candidate.candidate_id = self.generate_candidate_id(conn, office=getattr(candidate, "intake_office", "Pernem"))
 
             candidate.created_at = candidate.created_at or now
             candidate.updated_at = now
@@ -142,8 +149,9 @@ class CandidateRepository:
                 INSERT INTO candidates (
                     candidate_id, full_name, dob, age, gender, address,
                     village, taluka, pincode, mobile, alternate_mobile, email,
-                    created_at, updated_at, sync_status, last_synced_at, is_deleted, is_demo
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    created_at, updated_at, sync_status, last_synced_at, is_deleted, is_demo,
+                    intake_office
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     candidate.candidate_id,
@@ -163,7 +171,8 @@ class CandidateRepository:
                     candidate.sync_status,
                     candidate.last_synced_at,
                     1 if candidate.is_deleted else 0,
-                    1 if candidate.is_demo else 0
+                    1 if candidate.is_demo else 0,
+                    getattr(candidate, "intake_office", "Pernem") or "Pernem"
                 )
             )
 
@@ -305,7 +314,8 @@ class CandidateRepository:
                 UPDATE candidates SET
                     full_name = ?, dob = ?, age = ?, gender = ?, address = ?,
                     village = ?, taluka = ?, pincode = ?, mobile = ?, alternate_mobile = ?,
-                    email = ?, updated_at = ?, sync_status = ?, is_deleted = ?
+                    email = ?, updated_at = ?, sync_status = ?, is_deleted = ?,
+                    intake_office = ?
                 WHERE candidate_id = ?
                 """,
                 (
@@ -323,6 +333,7 @@ class CandidateRepository:
                     candidate.updated_at,
                     candidate.sync_status,
                     1 if candidate.is_deleted else 0,
+                    getattr(candidate, "intake_office", "Pernem") or "Pernem",
                     candidate.candidate_id
                 )
             )
@@ -475,6 +486,12 @@ class CandidateRepository:
             return self._build_candidate(c_row, e_row, emp_row, p_row, loc_row, con_row)
 
     def _build_candidate(self, c_row, e_row, emp_row, p_row, loc_row=None, con_row=None) -> Candidate:
+        if "intake_office" in c_row.keys() and c_row["intake_office"]:
+            intake_office = c_row["intake_office"]
+        else:
+            cid = c_row["candidate_id"] or ""
+            intake_office = "Korgao" if cid.startswith("KPST") else "Pernem"
+
         cand = Candidate(
             candidate_id=c_row["candidate_id"],
             full_name=c_row["full_name"],
@@ -493,7 +510,8 @@ class CandidateRepository:
             sync_status=c_row["sync_status"],
             last_synced_at=c_row["last_synced_at"],
             is_deleted=bool(c_row["is_deleted"]),
-            is_demo=bool(c_row["is_demo"]) if "is_demo" in c_row.keys() else False
+            is_demo=bool(c_row["is_demo"]) if "is_demo" in c_row.keys() else False,
+            intake_office=intake_office
         )
 
         if e_row:
@@ -621,6 +639,12 @@ class CandidateRepository:
             """
             cursor.execute(sql)
             for row in cursor.fetchall():
+                if "intake_office" in row.keys() and row["intake_office"]:
+                    intake_office = row["intake_office"]
+                else:
+                    cid = row["candidate_id"] or ""
+                    intake_office = "Korgao" if cid.startswith("KPST") else "Pernem"
+
                 cand = Candidate(
                     candidate_id=row["candidate_id"],
                     full_name=row["full_name"],
@@ -639,7 +663,8 @@ class CandidateRepository:
                     sync_status=row["sync_status"],
                     last_synced_at=row["last_synced_at"],
                     is_deleted=bool(row["is_deleted"]),
-                    is_demo=bool(row["is_demo"]) if "is_demo" in row.keys() else False
+                    is_demo=bool(row["is_demo"]) if "is_demo" in row.keys() else False,
+                    intake_office=intake_office
                 )
                 cand.education = Education(
                     highest_qualification=row["highest_qualification"] or "",

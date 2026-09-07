@@ -8,6 +8,20 @@ from app.version import APP_VERSION, APP_NAME, APP_ORGANISATION
 
 APP_TALUKA_DEFAULT = "Pernem"
 
+# Intake Offices & Candidate ID Prefix Mapping
+OFFICE_PERNEM = "Pernem"
+OFFICE_KORGAO = "Korgao"
+INTAKE_OFFICES = [OFFICE_PERNEM, OFFICE_KORGAO]
+
+OFFICE_PREFIX_MAP = {
+    OFFICE_PERNEM: "PST",
+    OFFICE_KORGAO: "KPST"
+}
+PREFIX_OFFICE_MAP = {
+    "PST": OFFICE_PERNEM,
+    "KPST": OFFICE_KORGAO
+}
+
 # Google Sheets & Cloud Backup Configuration Defaults
 DEFAULT_SPREADSHEET_ID = "1DC9TY2D2_mJgyJJ_hM3a91UsSOuqssWiBuMKhaxoW_0"
 DEFAULT_WORKSHEET_NAME = "Candidates"

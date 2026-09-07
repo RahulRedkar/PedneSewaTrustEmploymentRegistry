@@ -8,7 +8,7 @@ import os
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QFormLayout, QFrame, QSpinBox, QFileDialog,
-    QMessageBox, QScrollArea
+    QMessageBox, QScrollArea, QComboBox
 )
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
@@ -66,6 +66,11 @@ class SettingsView(QWidget):
 
         self.edit_org_name = QLineEdit(org_card)
         f_org.addRow("Organisation Name:", self.edit_org_name)
+
+        self.combo_default_office = QComboBox(org_card)
+        self.combo_default_office.addItem("Pernem (Prefix: PST)", "Pernem")
+        self.combo_default_office.addItem("Korgao (Prefix: KPST)", "Korgao")
+        f_org.addRow("Default Operating Office:", self.combo_default_office)
 
         # Logo display & file picker
         logo_box = QHBoxLayout()
@@ -238,6 +243,9 @@ class SettingsView(QWidget):
 
     def load_settings(self):
         self.edit_org_name.setText(config.get("organisation_name", "Pedne Sewa Trust"))
+        default_off = config.get("default_office", "Pernem")
+        idx = self.combo_default_office.findData(default_off)
+        self.combo_default_office.setCurrentIndex(idx if idx >= 0 else 0)
         self.edit_logo_path.setText(config.get("custom_logo_path", ""))
         self.edit_apps_script_url.setText(config.get("apps_script_url", ""))
         self.edit_api_key.setText(config.get("backup_api_key", ""))
@@ -278,6 +286,7 @@ class SettingsView(QWidget):
 
     def _on_save_settings(self):
         config.set("organisation_name", self.edit_org_name.text().strip() or "Pedne Sewa Trust")
+        config.set("default_office", self.combo_default_office.currentData() or "Pernem")
         config.set("custom_logo_path", self.edit_logo_path.text().strip())
         config.set("apps_script_url", self.edit_apps_script_url.text().strip())
         config.set("backup_api_key", self.edit_api_key.text().strip())

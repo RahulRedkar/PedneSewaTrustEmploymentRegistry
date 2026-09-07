@@ -23,8 +23,11 @@ from app.constants import (
     QUALIFICATION_LEVELS,
     GOVT_RESULT_STATUSES,
     JOB_SECTORS,
-    EMPLOYMENT_TYPES
+    EMPLOYMENT_TYPES,
+    OFFICE_PERNEM,
+    OFFICE_KORGAO
 )
+from app.config import config
 
 from app.signals import signals
 from database.repository import repository
@@ -131,6 +134,16 @@ class CandidateFormView(QWidget):
         # Column Left
         col_left = QFormLayout()
         col_left.setSpacing(12)
+
+        # Intake Office (Pernem or Korgao -> generates PST vs KPST)
+        self.combo_intake_office = QComboBox(group)
+        self.combo_intake_office.addItem(f"{OFFICE_PERNEM} (ID Prefix: PST)", OFFICE_PERNEM)
+        self.combo_intake_office.addItem(f"{OFFICE_KORGAO} (ID Prefix: KPST)", OFFICE_KORGAO)
+        default_off = config.get("default_office", OFFICE_PERNEM)
+        idx = self.combo_intake_office.findData(default_off)
+        if idx >= 0:
+            self.combo_intake_office.setCurrentIndex(idx)
+        col_left.addRow("Intake Office *:", self.combo_intake_office)
 
         # Full Name (Required)
         self.edit_name = QLineEdit(group)
@@ -677,7 +690,8 @@ class CandidateFormView(QWidget):
             pincode=payload["pincode"],
             mobile=payload["mobile"],
             alternate_mobile=payload["alternate_mobile"],
-            email=payload["email"]
+            email=payload["email"],
+            intake_office=self.combo_intake_office.currentData() or "Pernem"
         )
 
         # Attach granular Location details
@@ -798,6 +812,10 @@ class CandidateFormView(QWidget):
 
     def reset_form(self):
         """Clears all inputs to defaults."""
+        default_off = config.get("default_office", "Pernem")
+        idx = self.combo_intake_office.findData(default_off)
+        self.combo_intake_office.setCurrentIndex(idx if idx >= 0 else 0)
+
         self.edit_name.clear()
         self.edit_mobile.clear()
         self.edit_alt_mobile.clear()

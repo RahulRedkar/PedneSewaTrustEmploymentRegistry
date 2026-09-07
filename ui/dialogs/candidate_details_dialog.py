@@ -120,6 +120,7 @@ class CandidateDetailsDialog(QDialog):
         layout.addLayout(self._create_row("Mobile Number", self.candidate.mobile))
         layout.addLayout(self._create_row("Alternate Mobile", self.candidate.alternate_mobile))
         layout.addLayout(self._create_row("Email Address", self.candidate.email))
+        layout.addLayout(self._create_row("Intake Office", getattr(self.candidate, "intake_office", "Pernem") or "Pernem"))
         layout.addLayout(self._create_row("Registration Date", self.candidate.created_at))
         layout.addLayout(self._create_row("Last Updated", self.candidate.updated_at))
         layout.addStretch()
